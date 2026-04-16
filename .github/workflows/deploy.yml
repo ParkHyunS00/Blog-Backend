@@ -1,0 +1,130 @@
+name: Deploy
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: 'deployment-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  build-and-push:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write # 이미지 push 권한
+
+    outputs:
+      image_tag: ${{ steps.image-tag.outputs.image_tag }}
+      repo_name: ${{ steps.repo.outputs.repo_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew bootJar
+
+      - name: Docker login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          logout: true
+
+      - name: Convert repo name to lowercase
+        id: repo
+        run: echo "repo_name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Set image tag
+        id: image-tag
+        run: echo "image_tag=latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.repo.outputs.repo_name }}:${{ steps.image-tag.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    if: needs.build-and-push.result == 'success'
+    runs-on: self-hosted
+
+    permissions:
+      packages: read
+
+    steps:
+      - name: Deploy on backend server
+        env:
+          IMAGE_NAME: ghcr.io/${{ needs.build-and-push.outputs.repo_name }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          ssh -o StrictHostKeyChecking=no blog-backend "
+            export DOCKER_IMAGE=${IMAGE_NAME}
+            export DOCKER_TAG=${IMAGE_TAG}
+            cd /opt/blog-backend
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+            docker compose pull
+            docker compose up -d
+          "
+
+  notify:
+    if: ${{ always() }}
+    needs: [ build-and-push, deploy ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notify success
+        if: needs.deploy.result == 'success'
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_DEPLOY_NOTI_WEBHOOK }}
+          embed-title: "🚀 Blog Backend 배포 성공 🚀"
+          embed-description: |
+            main PR 병합이 성공적으로 배포되었습니다.
+            > **Commit**: `${{ github.sha }}`
+            > **Tag**: `${{ needs.build-and-push.outputs.image_tag }}`
+          embed-color: 3066993
+          embed-author-name: ${{ github.actor }}
+          embed-footer-text: "Blog Backend CI/CD"
+
+      - name: Notify failure
+        if: needs.build-and-push.result == 'failure' || needs.deploy.result == 'failure'
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_DEPLOY_NOTI_WEBHOOK }}
+          embed-title: "🚨 Blog Backend 배포 실패 🚨"
+          embed-description: |
+            배포 중 오류가 발생했습니다.
+
+            > **build-and-push**: `${{ needs.build-and-push.result }}`
+            > **deploy**: `${{ needs.deploy.result }}`
+
+            🔍 **실행 로그 확인**
+            👉 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          embed-color: 15158332
+          embed-author-name: ${{ github.actor }}
+          embed-footer-text: "Blog Backend CI/CD"
