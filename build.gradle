@@ -1,7 +1,12 @@
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.1.0-M4'
 	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+jacoco {
+	toolVersion = "0.8.14"
 }
 
 group = 'com.parkhyuns00'
@@ -38,6 +43,15 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+jacocoTestReport {
+	dependsOn test
+
+	reports {
+		xml.required = true
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy jacocoTestReport
 }
