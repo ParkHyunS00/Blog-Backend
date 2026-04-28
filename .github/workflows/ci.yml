@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop
 
 concurrency:
   group: 'integration-${{ github.event.pull_request.number }}'
