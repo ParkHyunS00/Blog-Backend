@@ -8,7 +8,8 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum AdminExceptionCode implements ExceptionCode {
-    ADMIN_AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "AU01", "관리자 인증에 실패했습니다.")
+    ADMIN_AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "AU01", "관리자 인증에 실패했습니다."),
+    ADMIN_OTP_LOCKED(HttpStatus.LOCKED, "AU02", "관리자 OTP 인증이 잠겼습니다.")
     ;
 
     private final HttpStatus httpStatus;
