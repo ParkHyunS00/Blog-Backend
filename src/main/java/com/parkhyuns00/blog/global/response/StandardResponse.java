@@ -66,4 +66,14 @@ public class StandardResponse<T> {
             .status(code.getHttpStatus().value())
             .body(res);
     }
+
+    public static <T> ResponseEntity<StandardResponse<T>> failWithData(ExceptionCode code, T data) {
+        StandardResponse<T> response = StandardResponse.<T>builder()
+            .status(code.getHttpStatus().value())
+            .data(data)
+            .error(ErrorResponse.of(code))
+            .build();
+
+        return ResponseEntity.status(code.getHttpStatus().value()).body(response);
+    }
 }
