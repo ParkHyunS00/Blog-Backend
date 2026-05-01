@@ -32,12 +32,13 @@ public class AdminAuthAttempt {
         return attempt;
     }
 
-    public void recordFailure() {
+    public int recordFailure() {
         this.otpFailCount++;
         this.lastFailedAt = LocalDateTime.now();
         if (this.otpFailCount >= LOCK_THRESHOLD) {
             this.locked = Boolean.TRUE;
         }
+        return this.otpFailCount;
     }
 
     public void reset() {

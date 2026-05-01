@@ -24,9 +24,9 @@ public class AdminAuthAttemptService {
     }
 
     @Transactional
-    public void recordFailure() {
+    public int recordFailure() {
         AdminAuthAttempt attempt = findOrCreateDefaultAttempt();
-        attempt.recordFailure();
+        return attempt.recordFailure();
     }
 
     @Transactional

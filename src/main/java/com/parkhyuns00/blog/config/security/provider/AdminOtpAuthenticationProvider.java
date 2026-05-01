@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.config.security.provider;
 
 import com.parkhyuns00.blog.config.security.dto.AdminProperties;
 import com.parkhyuns00.blog.config.security.exception.AdminExceptionCode;
+import com.parkhyuns00.blog.config.security.exception.AdminOtpAuthenticationException;
 import com.parkhyuns00.blog.config.security.principal.AdminPrincipal;
 import com.parkhyuns00.blog.config.security.role.AdminRole;
 import com.parkhyuns00.blog.config.security.token.AdminOtpAuthenticationToken;
@@ -42,14 +43,16 @@ public class AdminOtpAuthenticationProvider implements AuthenticationProvider {
 
         Object credentials = authentication.getCredentials();
         if (!(credentials instanceof String otpCode) || !OTP_PATTERN.matcher(otpCode).matches()) {
-            adminAuthAttemptService.recordFailure();
-            throw new BadCredentialsException("OTP is invalid");
+            int otpFailCount = adminAuthAttemptService.recordFailure();
+            boolean locked = adminAuthAttemptService.isLocked();
+            throw new AdminOtpAuthenticationException(otpFailCount, locked);
         }
 
         boolean authorized = googleAuthenticator.authorize(adminProperties.otpSecret(), Integer.parseInt(otpCode));
         if (!authorized) {
-            adminAuthAttemptService.recordFailure();
-            throw new BadCredentialsException("OTP is invalid");
+            int otpFailCount = adminAuthAttemptService.recordFailure();
+            boolean locked = adminAuthAttemptService.isLocked();
+            throw new AdminOtpAuthenticationException(otpFailCount, locked);
         }
 
         adminAuthAttemptService.reset();
