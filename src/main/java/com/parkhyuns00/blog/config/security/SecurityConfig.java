@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
@@ -41,7 +42,7 @@ public class SecurityConfig {
         AuthenticationManager am = authenticationManager();
         SecurityContextRepository repository = securityContextRepository();
 
-        http.csrf(AbstractHttpConfigurer::disable);
+        http.csrf(CsrfConfigurer::spa);
         http.formLogin(AbstractHttpConfigurer::disable);
         http.httpBasic(AbstractHttpConfigurer::disable);
         http.logout(AbstractHttpConfigurer::disable);
@@ -55,6 +56,7 @@ public class SecurityConfig {
         );
 
         http.authorizeHttpRequests((auth) ->  auth
+            .requestMatchers(HttpMethod.GET, "/api/csrf").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/key").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/otp").hasRole(AdminRole.PRE_ADMIN.name())
             .requestMatchers("/api/admin/**").hasRole(AdminRole.ADMIN.name())
