@@ -32,7 +32,13 @@ public class AdminAuthenticationFailureHandler implements AuthenticationFailureH
         HttpServletResponse response,
         AuthenticationException exception
     ) throws IOException {
-        log.warn("Admin authentication failed, reason={}", exception.getMessage());
+        log.warn(
+            "[Admin authentication] failed, uri={}, exception={}, reason={}, ip={}",
+            request.getRequestURI(),
+            exception.getClass().getSimpleName(),
+            exception.getMessage(),
+            request.getRemoteAddr()
+        );
 
         if (exception instanceof AdminOtpAuthenticationException otpException) {
             if (otpException.isLocked()) {
