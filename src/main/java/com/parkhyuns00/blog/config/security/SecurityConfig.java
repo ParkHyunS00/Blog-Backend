@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
@@ -46,6 +47,7 @@ public class SecurityConfig {
         http.formLogin(AbstractHttpConfigurer::disable);
         http.httpBasic(AbstractHttpConfigurer::disable);
         http.logout(AbstractHttpConfigurer::disable);
+        http.cors(Customizer.withDefaults());
 
         http.sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
@@ -56,8 +58,10 @@ public class SecurityConfig {
         );
 
         http.authorizeHttpRequests((auth) ->  auth
-            .requestMatchers(HttpMethod.GET, "/api/csrf").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/admin/auth/status").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/admin/csrf").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/key").permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/admin/auth/logout").hasRole(AdminRole.ADMIN.name())
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/otp").hasRole(AdminRole.PRE_ADMIN.name())
             .requestMatchers("/api/admin/**").hasRole(AdminRole.ADMIN.name())
             .anyRequest().authenticated()
