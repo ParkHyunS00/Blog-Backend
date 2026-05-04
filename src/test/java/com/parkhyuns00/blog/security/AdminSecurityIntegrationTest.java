@@ -57,7 +57,7 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("CSRF 토큰 발급 엔드포인트는 인증 없이 접근 가능하고 XSRF-TOKEN 쿠키를 내려준다.")
     void test_csrf_endpoint_issue_csrf_cookie() throws Exception {
-        mockMvc.perform(get("/api/csrf"))
+        mockMvc.perform(get("/api/admin/csrf"))
             .andExpect(status().isOk())
             .andExpect(cookie().exists("XSRF-TOKEN"));
     }
@@ -192,7 +192,7 @@ public class AdminSecurityIntegrationTest {
     }
 
     private Cookie issueCsrfToken() throws Exception {
-        return mockMvc.perform(get("/api/csrf")
+        return mockMvc.perform(get("/api/admin/csrf")
             .session(new MockHttpSession()))
             .andExpect(status().isOk())
             .andExpect(cookie().exists("XSRF-TOKEN"))
