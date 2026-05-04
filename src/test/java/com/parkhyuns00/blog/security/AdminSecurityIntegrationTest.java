@@ -191,6 +191,50 @@ public class AdminSecurityIntegrationTest {
         return session;
     }
 
+    @Test
+    @DisplayName("ADMIN 세션에서 로그아웃하면 관리자 인증 상태가 해제된다.")
+    void test_admin_logout_success() throws Exception {
+        MockHttpSession session = adminKeyLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(googleAuthenticator.authorize(OTP_SECRET, Integer.parseInt(OTP_CODE))).thenReturn(true);
+
+        mockMvc.perform(post("/api/admin/auth/otp")
+            .session(session)
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                  {"otpCode":"123123"}
+                  """))
+            .andExpect(status().isOk());
+
+        Cookie logoutCsrfCookie = issueCsrfToken();
+
+        mockMvc.perform(post("/api/admin/auth/logout")
+            .session(session)
+            .cookie(logoutCsrfCookie)
+            .header("X-XSRF-TOKEN", logoutCsrfCookie.getValue()))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/test")
+            .session(session))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("PRE_ADMIN 세션에서는 로그아웃 요청이 거절된다.")
+    void test_pre_admin_logout_is_forbidden() throws Exception {
+        MockHttpSession session = adminKeyLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(post("/api/admin/auth/logout")
+            .session(session)
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+            .andExpect(status().isForbidden());
+    }
+
     private Cookie issueCsrfToken() throws Exception {
         return mockMvc.perform(get("/api/admin/csrf")
             .session(new MockHttpSession()))
