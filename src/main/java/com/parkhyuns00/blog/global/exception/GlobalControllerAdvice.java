@@ -33,6 +33,22 @@ public class GlobalControllerAdvice {
         return StandardResponse.fail(exception.getExceptionCode());
     }
 
+    @ExceptionHandler(ExternalException.class)
+    public ResponseEntity<StandardResponse<Void>> handleExternalException(ExternalException exception) {
+        log.error("[ExternalException] code={}, message={}, detail={}",
+            exception.getExceptionCode().getCode(),
+            exception.getExceptionCode().getMessage(),
+            exception.getDetail(),
+            exception
+        );
+
+        if (exception.getDetail() != null) {
+            return StandardResponse.fail(exception.getExceptionCode(), exception.getDetail());
+        }
+
+        return StandardResponse.fail(exception.getExceptionCode());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<StandardResponse<Void>> handleMethodArgumentNotValidException(
         MethodArgumentNotValidException exception
