@@ -12,7 +12,7 @@ CREATE TABLE categories (
 CREATE TABLE posts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
-    summary VARCHAR(500) NULL,
+    summary VARCHAR(500) NOT NULL,
     content LONGTEXT NOT NULL,
     category_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL,
@@ -49,13 +49,13 @@ CREATE TABLE tags (
 );
 
 CREATE TABLE post_tags (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     post_id BIGINT NOT NULL,
     tag_id BIGINT NOT NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
 
-    PRIMARY KEY (post_id, tag_id),
-
     CONSTRAINT fk_post_tags_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-    CONSTRAINT fk_post_tags_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    CONSTRAINT fk_post_tags_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    CONSTRAINT uk_post_tags_post_tag UNIQUE (post_id, tag_id)
 );
