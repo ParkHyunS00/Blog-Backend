@@ -1,6 +1,8 @@
 package com.parkhyuns00.blog.domain.post.model;
 
 import com.parkhyuns00.blog.domain.common.model.BaseEntity;
+import com.parkhyuns00.blog.domain.post.exception.PostException;
+import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -38,5 +40,17 @@ public class PostImage extends BaseEntity {
 
     public boolean isAttached() {
         return this.post != null;
+    }
+
+    public void attachTo(Post post) {
+        if (post == null) {
+            throw new PostException(PostExceptionCode.INVALID_POST);
+        }
+
+        if (isAttached()) {
+            throw new PostException(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
+        }
+
+        this.post = post;
     }
 }
