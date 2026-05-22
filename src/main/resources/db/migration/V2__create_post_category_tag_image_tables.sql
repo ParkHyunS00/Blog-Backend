@@ -39,7 +39,7 @@ CREATE TABLE post_images (
 
 CREATE TABLE tags (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
+    name VARCHAR(20) NOT NULL,
     slug VARCHAR(80) NOT NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
