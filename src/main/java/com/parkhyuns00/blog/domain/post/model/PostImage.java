@@ -29,4 +29,14 @@ public class PostImage extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id")
     private Post post;
+
+    public PostImage(PostImageType type, String objectKey, String mimeType) {
+        this.type = type;
+        this.objectKey = objectKey;
+        this.mimeType = mimeType;
+    }
+
+    public boolean isAttached() {
+        return this.post != null;
+    }
 }
