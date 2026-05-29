@@ -10,6 +10,7 @@ import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.util.SlugUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,10 @@ public class CategoryService {
 
     @Transactional
     public Category getOrCreateByName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new CategoryException(CategoryExceptionCode.INVALID_CATEGORY_NAME);
+        }
+
         String normalizedName = name.trim();
         String slug = generateSlug(normalizedName);
 
@@ -48,6 +53,9 @@ public class CategoryService {
 
         try {
             return categoryRepository.saveAndFlush(new Category(name, slug));
+        } catch (DataIntegrityViolationException exception) {
+            return categoryRepository.findBySlug(slug)
+                .orElseThrow(() -> new CategoryException(CategoryExceptionCode.CATEGORY_SAVE_FAILED, exception));
         } catch (DataAccessException exception) {
             throw new CategoryException(CategoryExceptionCode.CATEGORY_SAVE_FAILED, exception);
         }

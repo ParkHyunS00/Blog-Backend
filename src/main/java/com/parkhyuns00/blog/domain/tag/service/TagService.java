@@ -8,6 +8,7 @@ import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import com.parkhyuns00.blog.util.SlugUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,16 +35,14 @@ public class TagService {
             throw new TagException(TagExceptionCode.TOO_MANY_TAGS);
         }
 
-        List<String> slugs = names.stream()
-            .map(this::generateSlug)
+        List<TagNameAndSlug> tagNameAndSlugs = names.stream()
+            .map(name -> new TagNameAndSlug(name, generateSlug(name)))
             .toList();
 
-        if (slugs.size() != new HashSet<>(slugs).size()) {
-            throw new TagException(TagExceptionCode.TAG_NAME_DUPLICATED);
-        }
+        validateDuplicatedSlugs(tagNameAndSlugs);
 
-        return names.stream()
-            .map(this::findOrCreateByName)
+        return tagNameAndSlugs.stream()
+            .map(this::findOrCreate)
             .toList();
     }
 
@@ -53,9 +52,20 @@ public class TagService {
             .toList();
     }
 
-    private Tag findOrCreateByName(String name) {
-        String slug = generateSlug(name);
-        return tagRepository.findBySlug(slug).orElseGet(() -> create(name, slug));
+    private void validateDuplicatedSlugs(List<TagNameAndSlug> tagNameAndSlugs) {
+        long distinctSlugCount = tagNameAndSlugs.stream()
+            .map(TagNameAndSlug::slug)
+            .distinct()
+            .count();
+
+        if (tagNameAndSlugs.size() != distinctSlugCount) {
+            throw new TagException(TagExceptionCode.TAG_NAME_DUPLICATED);
+        }
+    }
+
+    private Tag findOrCreate(TagNameAndSlug tagNameAndSlug) {
+        return tagRepository.findBySlug(tagNameAndSlug.slug())
+            .orElseGet(() -> create(tagNameAndSlug.name(), tagNameAndSlug.slug()));
     }
 
     private Tag create(String name, String slug) {
@@ -65,6 +75,9 @@ public class TagService {
 
         try {
             return tagRepository.saveAndFlush(new Tag(name, slug));
+        } catch (DataIntegrityViolationException exception) {
+            return tagRepository.findBySlug(slug)
+                .orElseThrow(() -> new TagException(TagExceptionCode.TAG_SAVE_FAILED, exception));
         } catch (DataAccessException exception) {
             throw new TagException(TagExceptionCode.TAG_SAVE_FAILED, exception);
         }
@@ -77,4 +90,6 @@ public class TagService {
             throw new TagException(TagExceptionCode.INVALID_TAG_NAME, exception);
         }
     }
+
+    private record TagNameAndSlug(String name, String slug) { }
 }
