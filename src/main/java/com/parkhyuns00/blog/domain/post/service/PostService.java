@@ -16,7 +16,6 @@ import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +35,8 @@ public class PostService {
 
     @Transactional
     public PostCreateDto create(PostCreateRequest request) {
-        validateImageIds(request.thumbnailImageId(), request.contentImageIds());
+        List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
+        validateCreateRequest(request, contentImageIds);
 
         Category category = categoryService.getOrCreateByName(request.categoryName());
         List<Tag> tags = tagService.getOrCreateAllByNames(request.tagNames());
@@ -45,10 +45,14 @@ public class PostService {
         Post savedPost = postRepository.save(post);
 
         attachThumbnailImage(savedPost, request.thumbnailImageId());
-        attachContentImages(savedPost, request.contentImageIds());
+        attachContentImages(savedPost, contentImageIds);
         savePostTags(savedPost, tags);
 
         return PostCreateDto.from(savedPost);
+    }
+
+    private List<Long> normalizeContentImageIds(List<Long> contentImageIds) {
+        return contentImageIds == null ? List.of() : contentImageIds;
     }
 
     private Post createPost(PostCreateRequest request, Category category) {
@@ -67,28 +71,12 @@ public class PostService {
     }
 
     private void attachThumbnailImage(Post post, Long thumbnailImageId) {
-        if (thumbnailImageId == null) {
-            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
-        }
-
         PostImage thumbnail = getPostImage(thumbnailImageId);
         validateImageType(thumbnail, PostImageType.THUMBNAIL);
         thumbnail.attachTo(post);
     }
 
     private void attachContentImages(Post post, List<Long> contentImageIds) {
-        if (contentImageIds == null || contentImageIds.isEmpty()) {
-            return;
-        }
-
-        if (contentImageIds.stream().anyMatch(Objects::isNull)) {
-            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
-        }
-
-        if (contentImageIds.size() != contentImageIds.stream().distinct().count()) {
-            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
-        }
-
         for (Long imageId : contentImageIds) {
             PostImage image = getPostImage(imageId);
             validateImageType(image, PostImageType.CONTENT);
@@ -99,6 +87,18 @@ public class PostService {
     private PostImage getPostImage(Long imageId) {
         return postImageRepository.findById(imageId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_IMAGE_NOT_FOUND));
+    }
+
+    private void validateCreateRequest(PostCreateRequest request, List<Long> contentImageIds) {
+        if (request.status() == null) {
+            throw new PostException(PostExceptionCode.INVALID_POST_STATUS);
+        }
+
+        if (request.categoryName() == null || request.categoryName().isBlank()) {
+            throw new PostException(PostExceptionCode.INVALID_POST_CATEGORY);
+        }
+
+        validateImageIds(request.thumbnailImageId(), contentImageIds);
     }
 
     private void validateImageType(PostImage image, PostImageType expectedType) {
