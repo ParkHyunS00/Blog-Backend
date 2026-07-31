@@ -1,7 +1,12 @@
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.1.0-M4'
 	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+jacoco {
+	toolVersion = "0.8.14"
 }
 
 group = 'com.parkhyuns00'
@@ -28,6 +33,21 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+	// Google OTP
+	implementation 'com.warrenstrange:googleauth:1.5.0'
+
+	// Flyway
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-mysql'
+
+	// S3 (Garage)
+	implementation 'software.amazon.awssdk:s3:2.44.9'
+
+	// Tika
+	implementation 'org.apache.tika:tika-core:3.3.0'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -36,8 +56,18 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testRuntimeOnly 'com.h2database:h2'
 }
 
-tasks.named('test') {
+jacocoTestReport {
+	dependsOn test
+
+	reports {
+		xml.required = true
+	}
+}
+
+tasks.named('test', Test) {
 	useJUnitPlatform()
+	finalizedBy jacocoTestReport
 }
