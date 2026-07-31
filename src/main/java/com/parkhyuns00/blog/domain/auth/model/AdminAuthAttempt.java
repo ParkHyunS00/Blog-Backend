@@ -21,7 +21,8 @@ public class AdminAuthAttempt {
     @Column(name = "otp_fail_count")
     private Integer otpFailCount = DEFAULT_FAIL_COUNT;
 
-    private Boolean locked;
+    @Column(nullable = false)
+    private Boolean locked = Boolean.FALSE;
 
     @Column(name = "last_failed_at")
     private LocalDateTime lastFailedAt;
@@ -29,6 +30,8 @@ public class AdminAuthAttempt {
     public static AdminAuthAttempt initial() {
         AdminAuthAttempt attempt = new AdminAuthAttempt();
         attempt.id = ADMIN_ID;
+        attempt.otpFailCount = DEFAULT_FAIL_COUNT;
+        attempt.locked = Boolean.FALSE;
         return attempt;
     }
 
@@ -44,7 +47,7 @@ public class AdminAuthAttempt {
     public void reset() {
         this.otpFailCount = DEFAULT_FAIL_COUNT;
         this.lastFailedAt = null;
-        this.locked = null;
+        this.locked = Boolean.FALSE;
     }
 
     public boolean isLocked() {
