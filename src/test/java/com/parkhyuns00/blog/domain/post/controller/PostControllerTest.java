@@ -22,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -256,7 +257,7 @@ public class PostControllerTest {
     @Test
     @DisplayName("공개 게시글 목록 조회가 성공하면 페이지 응답을 반환한다.")
     void test_get_published_posts_success() throws Exception {
-        Pageable pageable = PageRequest.of(0, 10);
+        Pageable pageable = PageRequest.of(0, 5);
 
         PostSummaryDto summary = new PostSummaryDto(
             1L,
@@ -281,10 +282,9 @@ public class PostControllerTest {
             ));
 
         mockMvc.perform(get("/api/posts")
-                .param("category", "backend")
                 .param("tags", "java", "spring")
                 .param("page", "0")
-                .param("size", "10"))
+                .param("size", "5"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.content[0].postId").value(1))
@@ -292,7 +292,7 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.data.content[0].categorySlug").value("backend"))
             .andExpect(jsonPath("$.data.content[0].tags[0].slug").value("java"))
             .andExpect(jsonPath("$.data.page").value(0))
-            .andExpect(jsonPath("$.data.size").value(10))
+            .andExpect(jsonPath("$.data.size").value(5))
             .andExpect(jsonPath("$.data.totalElements").value(1))
             .andExpect(jsonPath("$.data.totalPages").value(1))
             .andExpect(jsonPath("$.data.hasNext").value(false))
@@ -309,8 +309,109 @@ public class PostControllerTest {
 
         PostSearchCondition condition = conditionCaptor.getValue();
 
-        assertThat(condition.categorySlug()).isEqualTo("backend");
+        assertThat(condition.categorySlug()).isNull();
         assertThat(condition.tagSlugs()).containsExactly("java", "spring");
         assertThat(condition.keyword()).isNull();
+    }
+
+    @Test
+    @DisplayName("카테고리 조건으로 공개 게시글 목록을 조회한다.")
+    void test_get_published_posts_by_category_success() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts")
+                .param("category", "backend")
+                .param("page", "0")
+                .param("size", "5"))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<PostSearchCondition> conditionCaptor =
+            ArgumentCaptor.forClass(PostSearchCondition.class);
+
+        verify(postService).getPublishedPosts(conditionCaptor.capture(), any(Pageable.class));
+
+        PostSearchCondition condition = conditionCaptor.getValue();
+
+        assertThat(condition.categorySlug()).isEqualTo("backend");
+        assertThat(condition.tagSlugs()).isEmpty();
+        assertThat(condition.keyword()).isNull();
+    }
+
+    @Test
+    @DisplayName("게시글 목록 조회 시 페이지 번호가 음수이면 400 을 반환한다.")
+    void test_get_published_posts_fail_when_page_negative() throws Exception {
+        mockMvc.perform(get("/api/posts")
+                .param("page", "-1")
+                .param("size", "5"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error.code").value("COMMON_001"));
+
+        verify(postService, never()).getPublishedPosts(any(), any());
+    }
+
+    @Test
+    @DisplayName("게시글 목록 조회 시 페이지 크기가 최대값을 초과하면 400 을 반환한다.")
+    void test_get_published_posts_fail_when_size_exceeded() throws Exception {
+        mockMvc.perform(get("/api/posts")
+                .param("page", "0")
+                .param("size", "6"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error.code").value("COMMON_001"));
+
+        verify(postService, never()).getPublishedPosts(any(), any());
+    }
+
+    @Test
+    @DisplayName("게시글 목록 조회 시 페이지 크기가 최대값이면 게시글 목록을 조회한다.")
+    void test_get_published_posts_success_when_size_maximum() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts")
+                .param("page", "0")
+                .param("size", "5"))
+            .andExpect(status().isOk());
+
+        verify(postService).getPublishedPosts(any(), any());
+    }
+
+    @Test
+    @DisplayName("게시글 목록 조회 시 페이지 크기가 0이면 400 을 반환한다.")
+    void test_get_published_posts_fail_when_size_zero() throws Exception {
+        mockMvc.perform(get("/api/posts")
+                .param("page", "0")
+                .param("size", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error.code").value("COMMON_001"));
+
+        verify(postService, never())
+            .getPublishedPosts(any(), any());
+    }
+
+    @Test
+    @DisplayName("게시글 목록 조회 시 페이지 요청값이 없으면 기본값을 사용한다.")
+    void test_get_published_posts_with_default_page_success() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts"))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> pageableCaptor =
+            ArgumentCaptor.forClass(Pageable.class);
+
+        verify(postService).getPublishedPosts(
+            any(PostSearchCondition.class),
+            pageableCaptor.capture()
+        );
+
+        Pageable pageable = pageableCaptor.getValue();
+
+        assertThat(pageable.getPageNumber()).isZero();
+        assertThat(pageable.getPageSize()).isEqualTo(5);
     }
 }

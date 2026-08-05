@@ -10,8 +10,6 @@ import com.parkhyuns00.blog.global.response.StandardResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,9 +26,9 @@ public class PostController {
 
     @GetMapping("/api/posts")
     public ResponseEntity<StandardResponse<PageResponse<PostSummaryDto>>> getPublishedPosts(
-        @ModelAttribute PostRequest request, @PageableDefault(size = 5) Pageable pageable
+        @Valid @ModelAttribute PostRequest request
     ) {
-        Page<PostSummaryDto> posts = postService.getPublishedPosts(request.toCondition(), pageable);
+        Page<PostSummaryDto> posts = postService.getPublishedPosts(request.toCondition(), request.toPageable());
 
         return StandardResponse.ok(PageResponse.from(posts));
     }
