@@ -10,6 +10,7 @@ import com.parkhyuns00.blog.domain.post.model.Post;
 import com.parkhyuns00.blog.domain.post.model.PostImage;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
 import com.parkhyuns00.blog.domain.post.model.PostTag;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
@@ -25,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Optional;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -272,5 +274,63 @@ public class PostQueryRepositoryTest {
             .extracting(PostSummaryDto::postId)
             .containsExactly(taggedPost.getId())
             .doesNotContain(untaggedPost.getId());
+    }
+
+    @Test
+    @DisplayName("공개 게시글 상세 정보를 조회한다.")
+    void test_find_published_post_by_id_success() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+        Tag java = tagRepository.save(new Tag("Java", "java"));
+        Post post = postRepository.save(Post.publish("title", "summary", "content", category));
+        PostImage thumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "thumbnail/object-key",
+            "image/webp"
+        );
+        thumbnail.attachTo(post);
+
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "content/object-key", "image/webp");
+        contentImage.attachTo(post);
+
+        postImageRepository.saveAll(List.of(thumbnail, contentImage));
+        postTagRepository.save(new PostTag(post, java));
+
+        Optional<PostDetailDto> result = postRepository.findPublishedPostById(post.getId());
+
+        assertThat(result).isPresent();
+
+        PostDetailDto detail = result.get();
+
+        assertThat(detail.postId()).isEqualTo(post.getId());
+        assertThat(detail.title()).isEqualTo("title");
+        assertThat(detail.summary()).isEqualTo("summary");
+        assertThat(detail.content()).isEqualTo("content");
+        assertThat(detail.thumbnailImageId()).isEqualTo(thumbnail.getId());
+        assertThat(detail.categoryName()).isEqualTo("Backend");
+        assertThat(detail.categorySlug()).isEqualTo("backend");
+        assertThat(detail.tags())
+            .extracting(TagDto::slug)
+            .containsExactly("java");
+        assertThat(detail.contentImageIds())
+            .containsExactly(contentImage.getId());
+    }
+
+    @Test
+    @DisplayName("초안 게시글은 공개 상세 조회 결과에 포함하지 않는다.")
+    void test_find_published_post_by_id_empty_when_draft() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+        Post draft = postRepository.save(Post.createDraft("title", "summary", "content", category));
+
+        Optional<PostDetailDto> result = postRepository.findPublishedPostById(draft.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 게시글을 조회하면 빈 결과를 반환한다.")
+    void test_find_published_post_by_id_empty_when_not_found() {
+        Optional<PostDetailDto> result = postRepository.findPublishedPostById(999L);
+
+        assertThat(result).isEmpty();
     }
 }
