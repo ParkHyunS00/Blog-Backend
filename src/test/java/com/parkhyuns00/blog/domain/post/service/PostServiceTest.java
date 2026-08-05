@@ -19,16 +19,24 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
+import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -353,6 +361,41 @@ public class PostServiceTest {
             .isEqualTo(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
 
         verify(postTagRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("공개 게시글 목록 조회를 요청하면 조회 결과를 반환한다.")
+    void test_get_published_posts_success() {
+        PostSearchCondition condition = new PostSearchCondition("backend", List.of("java", "spring"), null);
+        Pageable pageable = PageRequest.of(0, 10);
+        PostSummaryDto summary = new PostSummaryDto(
+            1L,
+            "title",
+            "summary",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java"),
+                new TagDto(2L, "Spring", "spring")
+            ),
+            LocalDateTime.now(),
+            LocalDateTime.now()
+        );
+
+        Page<PostSummaryDto> expected = new PageImpl<>(List.of(summary), pageable, 1);
+
+        when(postRepository.findPublishedPosts(condition, pageable)).thenReturn(expected);
+
+        Page<PostSummaryDto> result = postService.getPublishedPosts(
+            condition,
+            pageable
+        );
+
+        assertThat(result.getContent()).containsExactly(summary);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+
+        verify(postRepository).findPublishedPosts(condition, pageable);
     }
 
     private PostCreateRequest createRequest(

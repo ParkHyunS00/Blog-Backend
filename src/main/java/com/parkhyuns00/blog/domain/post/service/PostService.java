@@ -13,9 +13,13 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +53,10 @@ public class PostService {
         savePostTags(savedPost, tags);
 
         return PostCreateDto.from(savedPost);
+    }
+
+    public Page<PostSummaryDto> getPublishedPosts(PostSearchCondition condition, Pageable pageable) {
+        return postRepository.findPublishedPosts(condition, pageable);
     }
 
     private List<Long> normalizeContentImageIds(List<Long> contentImageIds) {
