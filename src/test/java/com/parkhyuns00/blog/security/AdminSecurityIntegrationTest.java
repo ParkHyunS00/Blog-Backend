@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -290,6 +292,18 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.data.postId").value(1))
             .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_posts() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content").isEmpty());
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
