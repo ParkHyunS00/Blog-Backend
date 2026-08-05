@@ -14,6 +14,7 @@ import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import jakarta.servlet.http.Cookie;
@@ -31,6 +32,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -304,6 +308,30 @@ public class AdminSecurityIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.content").isEmpty());
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 상세 정보를 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_post() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        when(postService.getPublishedPost(1L))
+            .thenReturn(new PostDetailDto(
+                1L,
+                "title",
+                "summary",
+                "content",
+                10L,
+                "Backend",
+                "backend",
+                List.of(),
+                List.of(),
+                now,
+                now
+            ));
+
+        mockMvc.perform(get("/api/posts/1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.postId").value(1));
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {

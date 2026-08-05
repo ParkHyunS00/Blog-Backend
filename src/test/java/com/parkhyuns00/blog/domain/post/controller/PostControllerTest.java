@@ -10,9 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.exception.PostException;
+import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
@@ -413,5 +416,62 @@ public class PostControllerTest {
 
         assertThat(pageable.getPageNumber()).isZero();
         assertThat(pageable.getPageSize()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("공개 게시글 상세 조회가 성공하면 게시글 정보를 반환한다.")
+    void test_get_published_post_success() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        PostDetailDto detail = new PostDetailDto(
+            1L,
+            "title",
+            "summary",
+            "content",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java"),
+                new TagDto(2L, "Spring", "spring")
+            ),
+            List.of(11L, 12L),
+            now,
+            now
+        );
+
+        when(postService.getPublishedPost(1L)).thenReturn(detail);
+
+        mockMvc.perform(get("/api/posts/1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.title").value("title"))
+            .andExpect(jsonPath("$.data.summary").value("summary"))
+            .andExpect(jsonPath("$.data.content").value("content"))
+            .andExpect(jsonPath("$.data.thumbnailImageId").value(10))
+            .andExpect(jsonPath("$.data.categoryName").value("Backend"))
+            .andExpect(jsonPath("$.data.categorySlug").value("backend"))
+            .andExpect(jsonPath("$.data.tags[0].slug").value("java"))
+            .andExpect(jsonPath("$.data.tags[1].slug").value("spring"))
+            .andExpect(jsonPath("$.data.contentImageIds[0]").value(11))
+            .andExpect(jsonPath("$.data.contentImageIds[1]").value(12))
+            .andDo(print());
+
+        verify(postService).getPublishedPost(1L);
+    }
+
+    @Test
+    @DisplayName("공개 게시글을 찾을 수 없으면 404 를 반환한다.")
+    void test_get_published_post_fail_when_not_found() throws Exception {
+        when(postService.getPublishedPost(999L)).thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        mockMvc.perform(get("/api/posts/999"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."))
+            .andDo(print());
+
+        verify(postService).getPublishedPost(999L);
     }
 }

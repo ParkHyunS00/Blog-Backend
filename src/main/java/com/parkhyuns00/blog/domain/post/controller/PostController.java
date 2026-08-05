@@ -4,6 +4,7 @@ import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostRequest;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.global.response.PageResponse;
 import com.parkhyuns00.blog.global.response.StandardResponse;
@@ -31,5 +32,10 @@ public class PostController {
         Page<PostSummaryDto> posts = postService.getPublishedPosts(request.toCondition(), request.toPageable());
 
         return StandardResponse.ok(PageResponse.from(posts));
+    }
+
+    @GetMapping("/api/posts/{postId}")
+    public ResponseEntity<StandardResponse<PostDetailDto>> getPublishedPost(@PathVariable Long postId) {
+        return StandardResponse.ok(postService.getPublishedPost(postId));
     }
 }
