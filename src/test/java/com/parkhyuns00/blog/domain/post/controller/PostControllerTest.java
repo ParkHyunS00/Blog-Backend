@@ -7,20 +7,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @WebMvcTest(PostController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -241,5 +251,66 @@ public class PostControllerTest {
             .andDo(print());
 
         verify(postService).create(any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("공개 게시글 목록 조회가 성공하면 페이지 응답을 반환한다.")
+    void test_get_published_posts_success() throws Exception {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        PostSummaryDto summary = new PostSummaryDto(
+            1L,
+            "title",
+            "summary",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java"),
+                new TagDto(2L, "Spring", "spring")
+            ),
+            LocalDateTime.now(),
+            LocalDateTime.now()
+        );
+
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(new PageImpl<>(
+                List.of(summary),
+                pageable,
+                1
+            ));
+
+        mockMvc.perform(get("/api/posts")
+                .param("category", "backend")
+                .param("tags", "java", "spring")
+                .param("page", "0")
+                .param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content[0].postId").value(1))
+            .andExpect(jsonPath("$.data.content[0].title").value("title"))
+            .andExpect(jsonPath("$.data.content[0].categorySlug").value("backend"))
+            .andExpect(jsonPath("$.data.content[0].tags[0].slug").value("java"))
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(10))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.totalPages").value(1))
+            .andExpect(jsonPath("$.data.hasNext").value(false))
+            .andExpect(jsonPath("$.data.hasPrevious").value(false))
+            .andDo(print());
+
+        ArgumentCaptor<PostSearchCondition> conditionCaptor =
+            ArgumentCaptor.forClass(PostSearchCondition.class);
+
+        verify(postService).getPublishedPosts(
+            conditionCaptor.capture(),
+            any(Pageable.class)
+        );
+
+        PostSearchCondition condition = conditionCaptor.getValue();
+
+        assertThat(condition.categorySlug()).isEqualTo("backend");
+        assertThat(condition.tagSlugs()).containsExactly("java", "spring");
+        assertThat(condition.keyword()).isNull();
     }
 }
