@@ -13,6 +13,7 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
@@ -57,6 +58,11 @@ public class PostService {
 
     public Page<PostSummaryDto> getPublishedPosts(PostSearchCondition condition, Pageable pageable) {
         return postRepository.findPublishedPosts(condition, pageable);
+    }
+
+    public PostDetailDto getPublishedPost(Long postId) {
+        return postRepository.findPublishedPostById(postId)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
     }
 
     private List<Long> normalizeContentImageIds(List<Long> contentImageIds) {

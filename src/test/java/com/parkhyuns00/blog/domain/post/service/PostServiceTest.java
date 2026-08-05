@@ -19,6 +19,7 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
@@ -396,6 +397,48 @@ public class PostServiceTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
 
         verify(postRepository).findPublishedPosts(condition, pageable);
+    }
+
+    @Test
+    @DisplayName("공개 게시글 상세 조회를 요청하면 게시글 정보를 반환한다.")
+    void test_get_published_post_success() {
+        LocalDateTime now = LocalDateTime.now();
+        PostDetailDto detail = new PostDetailDto(
+            1L,
+            "title",
+            "summary",
+            "content",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java")
+            ),
+            List.of(11L, 12L),
+            now,
+            now
+        );
+
+        when(postRepository.findPublishedPostById(1L)).thenReturn(Optional.of(detail));
+
+        PostDetailDto result = postService.getPublishedPost(1L);
+
+        assertThat(result).isEqualTo(detail);
+
+        verify(postRepository).findPublishedPostById(1L);
+    }
+
+    @Test
+    @DisplayName("공개 게시글을 찾을 수 없으면 예외가 발생한다.")
+    void test_get_published_post_fail_when_not_found() {
+        when(postRepository.findPublishedPostById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.getPublishedPost(999L))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository).findPublishedPostById(999L);
     }
 
     private PostCreateRequest createRequest(
