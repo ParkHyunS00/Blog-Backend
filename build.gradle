@@ -48,6 +48,12 @@ dependencies {
 	// Tika
 	implementation 'org.apache.tika:tika-core:3.3.0'
 
+	// OpenFeign QueryDSL
+	implementation 'io.github.openfeign.querydsl:querydsl-jpa:7.5'
+	annotationProcessor 'io.github.openfeign.querydsl:querydsl-apt:7.5:jpa'
+	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+	annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'
