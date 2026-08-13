@@ -334,6 +334,14 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.data.postId").value(1));
     }
 
+    @Test
+    @DisplayName("모든 사용자는 태그 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_tags() throws Exception {
+        mockMvc.perform(get("/api/tags"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 
