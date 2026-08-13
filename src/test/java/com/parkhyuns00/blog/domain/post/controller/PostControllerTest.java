@@ -474,4 +474,27 @@ public class PostControllerTest {
 
         verify(postService).getPublishedPost(999L);
     }
+
+    @Test
+    @DisplayName("검색어로 공개 게시글 목록을 조회한다.")
+    void test_get_published_posts_by_keyword_success() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts")
+                .param("keyword", "  스프링 보안  ")
+                .param("page", "0")
+                .param("size", "5"))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<PostSearchCondition> conditionCaptor = ArgumentCaptor.forClass(PostSearchCondition.class);
+
+        verify(postService).getPublishedPosts(conditionCaptor.capture(), any(Pageable.class));
+
+        PostSearchCondition condition = conditionCaptor.getValue();
+
+        assertThat(condition.categorySlug()).isNull();
+        assertThat(condition.tagSlugs()).isEmpty();
+        assertThat(condition.keyword()).isEqualTo("스프링 보안");
+    }
 }
