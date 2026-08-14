@@ -24,7 +24,6 @@ public record PostCreateRequest(
 
     List<String> tagNames,
 
-    @NotNull
     Long thumbnailImageId,
 
     List<Long> contentImageIds

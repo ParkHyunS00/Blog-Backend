@@ -333,4 +333,41 @@ public class PostQueryRepositoryTest {
 
         assertThat(result).isEmpty();
     }
+
+    @Test
+    @DisplayName("썸네일이 없는 공개 게시글을 목록에서 조회한다.")
+    void test_find_published_posts_success_without_thumbnail() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+
+        Post post = postRepository.save(Post.publish("제목", "요약", "본문", category));
+
+        Page<PostSummaryDto> result = postRepository.findPublishedPosts(
+            new PostSearchCondition(
+                null,
+                List.of(),
+                null
+            ),
+            PageRequest.of(0, 5)
+        );
+
+        assertThat(result.getContent())
+            .extracting(PostSummaryDto::postId)
+            .containsExactly(post.getId());
+
+        assertThat(result.getContent().getFirst().thumbnailImageId())
+            .isNull();
+    }
+
+    @Test
+    @DisplayName("썸네일이 없는 공개 게시글을 상세 조회한다.")
+    void test_find_published_post_by_id_success_without_thumbnail() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+
+        Post post = postRepository.save(Post.publish("제목", "요약", "본문", category));
+
+        PostDetailDto result = postRepository.findPublishedPostById(post.getId()).orElseThrow();
+
+        assertThat(result.postId()).isEqualTo(post.getId());
+        assertThat(result.thumbnailImageId()).isNull();
+    }
 }

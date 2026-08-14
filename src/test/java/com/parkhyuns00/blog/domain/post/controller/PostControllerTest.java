@@ -206,8 +206,10 @@ public class PostControllerTest {
     }
 
     @Test
-    @DisplayName("썸네일 이미지가 null 이면 400 응답을 반환한다.")
+    @DisplayName("썸네일 이미지가 없어도 게시글 생성 요청에 성공한다.")
     void test_create_post_fail_when_thumbnail_image_null() throws Exception {
+        when(postService.create(any(PostCreateRequest.class))).thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
         mockMvc.perform(post("/api/admin/posts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -222,11 +224,17 @@ public class PostControllerTest {
                     "contentImageIds": [2, 3]
                 }
                 """))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.status").value(400))
-            .andDo(print());
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.status").value(201))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status")
+            .value("PUBLISHED"));
 
-        verify(postService, never()).create(any(PostCreateRequest.class));
+        ArgumentCaptor<PostCreateRequest> captor = ArgumentCaptor.forClass(PostCreateRequest.class);
+
+        verify(postService).create(captor.capture());
+
+        assertThat(captor.getValue().thumbnailImageId()).isNull();
     }
 
     @Test

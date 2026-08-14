@@ -49,7 +49,7 @@ public class PostService {
         Post post = createPost(request, category);
         Post savedPost = postRepository.save(post);
 
-        attachThumbnailImage(savedPost, request.thumbnailImageId());
+        attachThumbnailImageIfPresent(savedPost, request.thumbnailImageId());
         attachContentImages(savedPost, contentImageIds);
         savePostTags(savedPost, tags);
 
@@ -84,7 +84,9 @@ public class PostService {
         postTagRepository.saveAll(postTags);
     }
 
-    private void attachThumbnailImage(Post post, Long thumbnailImageId) {
+    private void attachThumbnailImageIfPresent(Post post, Long thumbnailImageId) {
+        if (thumbnailImageId == null) return;
+
         PostImage thumbnail = getPostImage(thumbnailImageId);
         validateImageType(thumbnail, PostImageType.THUMBNAIL);
         thumbnail.attachTo(post);
@@ -122,10 +124,6 @@ public class PostService {
     }
 
     private void validateImageIds(Long thumbnailImageId, List<Long> contentImageIds) {
-        if (thumbnailImageId == null) {
-            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
-        }
-
         if (contentImageIds.stream().anyMatch(Objects::isNull)) {
             throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
         }
@@ -134,7 +132,7 @@ public class PostService {
             throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
         }
 
-        if (contentImageIds.contains(thumbnailImageId)) {
+        if (thumbnailImageId != null && contentImageIds.contains(thumbnailImageId)) {
             throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
         }
     }

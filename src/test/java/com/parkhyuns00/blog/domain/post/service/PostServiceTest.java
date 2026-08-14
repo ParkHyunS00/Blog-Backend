@@ -206,20 +206,28 @@ public class PostServiceTest {
     }
 
     @Test
-    @DisplayName("썸네일 이미지가 null 이면 예외가 발생한다.")
-    void test_create_fail_when_thumbnail_image_null() {
+    @DisplayName("썸네일 이미지가 없어도 게시글을 생성한다.")
+    void test_create_when_thumbnail_image_null() {
         PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), null, List.of());
 
-        assertThatThrownBy(() -> postService.create(request))
-            .isInstanceOf(PostException.class)
-            .extracting("exceptionCode")
-            .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
+        Category category = new Category("Spring", "spring");
 
-        verifyNoInteractions(categoryService);
-        verifyNoInteractions(tagService);
-        verifyNoInteractions(postRepository);
+        when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> {
+            Post post = invocation.getArgument(0);
+            ReflectionTestUtils.setField(post, "id", 10L);
+            return post;
+        });
+
+        PostCreateDto result = postService.create(request);
+
+        assertThat(result.postId()).isEqualTo(10L);
+        assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
+
+        verify(postRepository).save(any(Post.class));
         verifyNoInteractions(postImageRepository);
-        verifyNoInteractions(postTagRepository);
+        verify(postTagRepository).saveAll(List.of());
     }
 
     @Test
