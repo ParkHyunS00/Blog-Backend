@@ -14,6 +14,7 @@ import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import jakarta.servlet.http.Cookie;
@@ -23,12 +24,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -290,6 +296,50 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.data.postId").value(1))
             .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_posts() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content").isEmpty());
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 상세 정보를 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_post() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        when(postService.getPublishedPost(1L))
+            .thenReturn(new PostDetailDto(
+                1L,
+                "title",
+                "summary",
+                "content",
+                10L,
+                "Backend",
+                "backend",
+                List.of(),
+                List.of(),
+                now,
+                now
+            ));
+
+        mockMvc.perform(get("/api/posts/1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.postId").value(1));
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 태그 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_tags() throws Exception {
+        mockMvc.perform(get("/api/tags"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {

@@ -19,16 +19,25 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
+import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
+import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -197,20 +206,28 @@ public class PostServiceTest {
     }
 
     @Test
-    @DisplayName("썸네일 이미지가 null 이면 예외가 발생한다.")
-    void test_create_fail_when_thumbnail_image_null() {
+    @DisplayName("썸네일 이미지가 없어도 게시글을 생성한다.")
+    void test_create_when_thumbnail_image_null() {
         PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), null, List.of());
 
-        assertThatThrownBy(() -> postService.create(request))
-            .isInstanceOf(PostException.class)
-            .extracting("exceptionCode")
-            .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
+        Category category = new Category("Spring", "spring");
 
-        verifyNoInteractions(categoryService);
-        verifyNoInteractions(tagService);
-        verifyNoInteractions(postRepository);
+        when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> {
+            Post post = invocation.getArgument(0);
+            ReflectionTestUtils.setField(post, "id", 10L);
+            return post;
+        });
+
+        PostCreateDto result = postService.create(request);
+
+        assertThat(result.postId()).isEqualTo(10L);
+        assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
+
+        verify(postRepository).save(any(Post.class));
         verifyNoInteractions(postImageRepository);
-        verifyNoInteractions(postTagRepository);
+        verify(postTagRepository).saveAll(List.of());
     }
 
     @Test
@@ -353,6 +370,83 @@ public class PostServiceTest {
             .isEqualTo(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
 
         verify(postTagRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("공개 게시글 목록 조회를 요청하면 조회 결과를 반환한다.")
+    void test_get_published_posts_success() {
+        PostSearchCondition condition = new PostSearchCondition("backend", List.of("java", "spring"), null);
+        Pageable pageable = PageRequest.of(0, 10);
+        PostSummaryDto summary = new PostSummaryDto(
+            1L,
+            "title",
+            "summary",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java"),
+                new TagDto(2L, "Spring", "spring")
+            ),
+            LocalDateTime.now(),
+            LocalDateTime.now()
+        );
+
+        Page<PostSummaryDto> expected = new PageImpl<>(List.of(summary), pageable, 1);
+
+        when(postRepository.findPublishedPosts(condition, pageable)).thenReturn(expected);
+
+        Page<PostSummaryDto> result = postService.getPublishedPosts(
+            condition,
+            pageable
+        );
+
+        assertThat(result.getContent()).containsExactly(summary);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+
+        verify(postRepository).findPublishedPosts(condition, pageable);
+    }
+
+    @Test
+    @DisplayName("공개 게시글 상세 조회를 요청하면 게시글 정보를 반환한다.")
+    void test_get_published_post_success() {
+        LocalDateTime now = LocalDateTime.now();
+        PostDetailDto detail = new PostDetailDto(
+            1L,
+            "title",
+            "summary",
+            "content",
+            10L,
+            "Backend",
+            "backend",
+            List.of(
+                new TagDto(1L, "Java", "java")
+            ),
+            List.of(11L, 12L),
+            now,
+            now
+        );
+
+        when(postRepository.findPublishedPostById(1L)).thenReturn(Optional.of(detail));
+
+        PostDetailDto result = postService.getPublishedPost(1L);
+
+        assertThat(result).isEqualTo(detail);
+
+        verify(postRepository).findPublishedPostById(1L);
+    }
+
+    @Test
+    @DisplayName("공개 게시글을 찾을 수 없으면 예외가 발생한다.")
+    void test_get_published_post_fail_when_not_found() {
+        when(postRepository.findPublishedPostById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.getPublishedPost(999L))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository).findPublishedPostById(999L);
     }
 
     private PostCreateRequest createRequest(
