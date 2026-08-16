@@ -4,12 +4,10 @@ import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
-import com.parkhyuns00.blog.domain.post.model.Post;
-import com.parkhyuns00.blog.domain.post.model.PostImage;
-import com.parkhyuns00.blog.domain.post.model.PostImageType;
-import com.parkhyuns00.blog.domain.post.model.PostTag;
+import com.parkhyuns00.blog.domain.post.model.*;
 import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
@@ -90,6 +88,19 @@ public class PostService {
         savePostTags(savedDraft, tags);
 
         return PostCreateDto.from(savedDraft);
+    }
+
+    @Transactional
+    public PostCreateDto updateDraft(Long postId, PostDraftUpdateRequest request) {
+        Post draft = postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        String sanitizedContent = sanitizeDraftContent(request.content());
+        Category category = getDraftCategory(request.categoryName());
+
+        draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
+
+        return PostCreateDto.from(draft);
     }
 
     public Page<PostSummaryDto> getPublishedPosts(PostSearchCondition condition, Pageable pageable) {

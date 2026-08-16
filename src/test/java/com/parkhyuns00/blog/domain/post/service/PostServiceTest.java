@@ -10,6 +10,7 @@ import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.Post;
@@ -738,6 +739,72 @@ public class PostServiceTest {
         verifyNoInteractions(categoryService);
         verifyNoInteractions(tagService);
         verifyNoInteractions(postRepository);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("게시글 초안의 작성 내용과 카테고리를 수정한다.")
+    void test_update_draft_success() {
+        Long postId = 1L;
+        Category oldCategory = new Category("Spring", "spring");
+        Category newCategory = new Category("Java", "java");
+
+        Post draft = Post.createDraft("old title", "old summary", "old content", oldCategory);
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            "new title",
+            "new summary",
+            """
+            <p onclick="alert('xss')">new content</p>
+            """,
+            "Java",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+        when(categoryService.getOrCreateByName("Java")).thenReturn(newCategory);
+
+        PostCreateDto result = postService.updateDraft(postId, request);
+
+        assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
+        assertThat(draft.getTitle()).isEqualTo("new title");
+        assertThat(draft.getSummary()).isEqualTo("new summary");
+        assertThat(draft.getContent())
+            .contains("<p>new content</p>")
+            .doesNotContain("onclick")
+            .doesNotContain("alert('xss')");
+        assertThat(draft.getCategory()).isSameAs(newCategory);
+
+        verify(postRepository).findByIdAndStatus(postId, PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("수정할 게시글 초안을 찾을 수 없으면 예외가 발생한다.")
+    void test_update_draft_fail_when_not_found() {
+        Long postId = 999L;
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.updateDraft(postId, request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
         verifyNoInteractions(postImageRepository);
         verifyNoInteractions(postTagRepository);
     }
