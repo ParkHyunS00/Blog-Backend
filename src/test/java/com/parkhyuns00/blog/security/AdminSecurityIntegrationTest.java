@@ -2,7 +2,7 @@ package com.parkhyuns00.blog.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.parkhyuns00.blog.config.security.dto.AdminProperties;
 import com.parkhyuns00.blog.domain.auth.repository.AdminAuthAttemptRepository;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
@@ -340,6 +341,46 @@ public class AdminSecurityIntegrationTest {
         mockMvc.perform(get("/api/tags"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 API에 접근할 수 없다.")
+    void test_unauthenticated_user_cannot_create_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(post("/api/admin/posts/draft")
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}")
+        )
+        .andExpect(status().isForbidden());
+
+        verify(postService, never()).createDraft(any(PostDraftCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글을 임시저장할 수 있다.")
+    void test_admin_can_create_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.createDraft(any(PostDraftCreateRequest.class))
+        ).thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(post("/api/admin/posts/draft")
+            .session(session)
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}")
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.status").value(201))
+        .andExpect(jsonPath("$.data.postId").value(1))
+        .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(postService).createDraft(any(PostDraftCreateRequest.class));
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
