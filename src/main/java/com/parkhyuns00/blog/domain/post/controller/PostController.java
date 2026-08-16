@@ -1,6 +1,7 @@
 package com.parkhyuns00.blog.domain.post.controller;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostRequest;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
@@ -23,6 +24,11 @@ public class PostController {
     @PostMapping("/api/admin/posts")
     public ResponseEntity<StandardResponse<PostCreateDto>> create(@Valid @RequestBody PostCreateRequest request) {
         return StandardResponse.created(postService.create(request));
+    }
+
+    @PostMapping("/api/admin/posts/draft")
+    public ResponseEntity<StandardResponse<PostCreateDto>> createDraft(@Valid @RequestBody PostDraftCreateRequest request) {
+        return StandardResponse.created(postService.createDraft(request));
     }
 
     @GetMapping("/api/posts")

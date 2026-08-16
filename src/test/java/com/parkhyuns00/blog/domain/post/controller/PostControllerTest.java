@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
@@ -504,5 +505,95 @@ public class PostControllerTest {
         assertThat(condition.categorySlug()).isNull();
         assertThat(condition.tagSlugs()).isEmpty();
         assertThat(condition.keyword()).isEqualTo("스프링 보안");
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 요청이 성공하면 201 응답을 반환한다.")
+    void test_create_draft_success() throws Exception {
+        when(postService.createDraft(any(PostDraftCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+                post("/api/admin/posts/draft")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                      {
+                          "title": "draft title",
+                          "summary": "draft summary",
+                          "content": "<p>draft content</p>",
+                          "categoryName": "Spring",
+                          "tagNames": ["Java", "Spring"],
+                          "thumbnailImageId": 1,
+                          "contentImageIds": [2, 3]
+                      }
+                      """)
+            )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.status").value(201))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andDo(print());
+
+        ArgumentCaptor<PostDraftCreateRequest> captor = ArgumentCaptor.forClass(PostDraftCreateRequest.class);
+
+        verify(postService).createDraft(captor.capture());
+
+        PostDraftCreateRequest request = captor.getValue();
+
+        assertThat(request.title()).isEqualTo("draft title");
+        assertThat(request.summary()).isEqualTo("draft summary");
+        assertThat(request.content()).isEqualTo("<p>draft content</p>");
+        assertThat(request.categoryName()).isEqualTo("Spring");
+        assertThat(request.tagNames()).containsExactly("Java", "Spring");
+        assertThat(request.thumbnailImageId()).isEqualTo(1L);
+        assertThat(request.contentImageIds()).containsExactly(2L, 3L);
+    }
+
+    @Test
+    @DisplayName("작성 내용이 없어도 게시글 임시저장 요청에 성공한다.")
+    void test_create_draft_success_when_content_empty() throws Exception {
+        when(postService.createDraft(any(PostDraftCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+                post("/api/admin/posts/draft")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")
+            )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.status").value(201))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        ArgumentCaptor<PostDraftCreateRequest> captor = ArgumentCaptor.forClass(PostDraftCreateRequest.class);
+
+        verify(postService).createDraft(captor.capture());
+
+        PostDraftCreateRequest request = captor.getValue();
+
+        assertThat(request.title()).isNull();
+        assertThat(request.summary()).isNull();
+        assertThat(request.content()).isNull();
+        assertThat(request.categoryName()).isNull();
+    }
+
+    @Test
+    @DisplayName("임시저장 제목이 200자를 초과하면 400 응답을 반환한다.")
+    void test_create_draft_fail_when_title_too_long() throws Exception {
+        String title = "a".repeat(201);
+
+        mockMvc.perform(
+            post("/api/admin/posts/draft")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                      "title": "%s"
+                  }
+                  """.formatted(title))
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+
+        verify(postService, never()).createDraft(any(PostDraftCreateRequest.class));
     }
 }
