@@ -97,8 +97,11 @@ public class PostService {
 
         String sanitizedContent = sanitizeDraftContent(request.content());
         Category category = getDraftCategory(request.categoryName());
+        List<Tag> tags = getDraftTags(request.tagNames());
 
         draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
+
+        replacePostTags(draft, tags);
 
         return PostCreateDto.from(draft);
     }
@@ -110,6 +113,12 @@ public class PostService {
     public PostDetailDto getPublishedPost(Long postId) {
         return postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
+    private void replacePostTags(Post draft, List<Tag> tags) {
+        postTagRepository.deleteAllByPostId(draft.getId());
+
+        savePostTags(draft, tags);
     }
 
     private Category getDraftCategory(String categoryName) {

@@ -13,10 +13,7 @@ import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
-import com.parkhyuns00.blog.domain.post.model.Post;
-import com.parkhyuns00.blog.domain.post.model.PostImage;
-import com.parkhyuns00.blog.domain.post.model.PostImageType;
-import com.parkhyuns00.blog.domain.post.model.PostStatus;
+import com.parkhyuns00.blog.domain.post.model.*;
 import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
@@ -807,6 +804,77 @@ public class PostServiceTest {
         verifyNoInteractions(tagService);
         verifyNoInteractions(postImageRepository);
         verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("게시글 초안을 수정하면 기존 태그를 요청 태그로 교체한다.")
+    void test_update_draft_replace_tags_success() {
+        Long postId = 1L;
+        Post draft = Post.createDraft(null, null, null, null);
+
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        Tag java = new Tag("Java", "java");
+        Tag spring = new Tag("Spring", "spring");
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            null,
+            null,
+            List.of("Java", "Spring"),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+        when(tagService.getOrCreateAllByNames(List.of("Java", "Spring"))).thenReturn(List.of(java, spring));
+
+        postService.updateDraft(postId, request);
+
+        verify(postTagRepository).deleteAllByPostId(postId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PostTag>> captor = ArgumentCaptor.forClass(List.class);
+
+        verify(postTagRepository).saveAll(captor.capture());
+
+        List<PostTag> savedPostTags = captor.getValue();
+
+        assertThat(savedPostTags)
+            .hasSize(2)
+            .extracting(postTag -> postTag.getTag().getName())
+            .containsExactly("Java", "Spring");
+
+        assertThat(savedPostTags).allSatisfy(postTag -> assertThat(postTag.getPost()).isSameAs(draft));
+    }
+
+    @Test
+    @DisplayName("태그 없이 게시글 초안을 수정하면 기존 태그를 모두 제거한다.")
+    void test_update_draft_remove_all_tags_success() {
+        Long postId = 1L;
+
+        Post draft = Post.createDraft(null, null, null, null);
+
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+
+        postService.updateDraft(postId, request);
+
+        verify(postTagRepository).deleteAllByPostId(postId);
+        verifyNoInteractions(tagService);
+        verify(postTagRepository).saveAll(List.of());
     }
 
     private PostCreateRequest createRequest(
