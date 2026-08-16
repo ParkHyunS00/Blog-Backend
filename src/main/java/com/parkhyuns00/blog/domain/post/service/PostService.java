@@ -18,35 +18,47 @@ import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
+import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PostService {
 
+    private static final Pattern CONTENT_IMAGE_PATTERN = Pattern.compile("src=\"/api/post-images/([1-9][0-9]*)\"");
+
     private final PostRepository postRepository;
     private final PostTagRepository postTagRepository;
     private final PostImageRepository postImageRepository;
     private final CategoryService categoryService;
     private final TagService tagService;
+    private final HtmlSanitizerUtil htmlSanitizerUtil;
 
     @Transactional
     public PostCreateDto create(PostCreateRequest request) {
         List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
         validateCreateRequest(request, contentImageIds);
 
+        String sanitizedContent = htmlSanitizerUtil.sanitize(request.content());
+        validateSanitizedContent(sanitizedContent);
+        validateContentImageIds(sanitizedContent, contentImageIds);
+
         Category category = categoryService.getOrCreateByName(request.categoryName());
         List<Tag> tags = tagService.getOrCreateAllByNames(request.tagNames());
 
-        Post post = createPost(request, category);
+        Post post = createPost(request, category, sanitizedContent);
         Post savedPost = postRepository.save(post);
 
         attachThumbnailImageIfPresent(savedPost, request.thumbnailImageId());
@@ -69,10 +81,10 @@ public class PostService {
         return contentImageIds == null ? List.of() : contentImageIds;
     }
 
-    private Post createPost(PostCreateRequest request, Category category) {
+    private Post createPost(PostCreateRequest request, Category category, String content) {
         return switch (request.status()) {
-            case DRAFT -> Post.createDraft(request.title(), request.summary(), request.content(), category);
-            case PUBLISHED -> Post.publish(request.title(), request.summary(), request.content(), category);
+            case DRAFT -> Post.createDraft(request.title(), request.summary(), content, category);
+            case PUBLISHED -> Post.publish(request.title(), request.summary(), content, category);
         };
     }
 
@@ -103,6 +115,25 @@ public class PostService {
     private PostImage getPostImage(Long imageId) {
         return postImageRepository.findById(imageId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_IMAGE_NOT_FOUND));
+    }
+
+    private void validateContentImageIds(String sanitizedContent, List<Long> contentImageIds) {
+        Matcher matcher = CONTENT_IMAGE_PATTERN.matcher(sanitizedContent);
+        Set<Long> referencedImageIds = new HashSet<>();
+
+        while (matcher.find()) {
+            referencedImageIds.add(Long.parseLong(matcher.group(1)));
+        }
+
+        if (!referencedImageIds.equals(new HashSet<>(contentImageIds))) {
+            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE);
+        }
+    }
+
+    private void validateSanitizedContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new PostException(PostExceptionCode.INVALID_POST_CONTENT);
+        }
     }
 
     private void validateCreateRequest(PostCreateRequest request, List<Long> contentImageIds) {

@@ -25,11 +25,14 @@ import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
+import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -62,6 +65,9 @@ public class PostServiceTest {
 
     @InjectMocks
     private PostService postService;
+
+    @Spy
+    private HtmlSanitizerUtil htmlSanitizerUtil;
 
     @Test
     @DisplayName("게시글을 발행 상태로 생성하면 게시글, 이미지, 태그가 연결된다.")
@@ -447,6 +453,132 @@ public class PostServiceTest {
             .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
 
         verify(postRepository).findPublishedPostById(999L);
+    }
+
+    @Test
+    @DisplayName("게시글을 생성하면 본문 HTML을 정제해서 저장한다.")
+    void test_create_post_sanitize_content_success() {
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            """
+            <p onclick="alert('xss')">정상 본문</p>
+            <script>alert('xss')</script>
+            <pre><code class="language-java">int number = 1;</code></pre>
+            """,
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        Category category = new Category("Spring", "spring");
+
+        when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postRepository.save(any(Post.class)))
+            .thenAnswer(invocation -> {
+                Post post = invocation.getArgument(0);
+                ReflectionTestUtils.setField(post, "id", 10L);
+                return post;
+            });
+
+        postService.create(request);
+
+        ArgumentCaptor<Post> postCaptor = ArgumentCaptor.forClass(Post.class);
+
+        verify(postRepository).save(postCaptor.capture());
+
+        Post savedPost = postCaptor.getValue();
+
+        assertThat(savedPost.getContent())
+            .contains("<p>정상 본문</p>")
+            .contains("class=\"language-java\"")
+            .doesNotContain("<script")
+            .doesNotContain("onclick")
+            .doesNotContain("alert('xss')");
+    }
+
+    @Test
+    @DisplayName("HTML 정제 후 본문이 비어 있으면 게시글 생성에 실패한다.")
+    void test_create_fail_when_sanitized_content_blank() {
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            """
+            <script>alert('xss')</script>
+            <iframe src="https://evil.example"></iframe>
+            """,
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        assertThatThrownBy(() -> postService.create(request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_CONTENT);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postRepository);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("본문 이미지 ID가 요청 이미지 ID에 없으면 게시글 생성에 실패한다.")
+    void test_create_fail_when_content_image_id_missing_from_request() {
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            "<p>본문</p><img src=\"/api/post-images/2\" alt=\"이미지\">",
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        assertThatThrownBy(() -> postService.create(request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postRepository);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("요청 이미지 ID가 본문에서 사용되지 않으면 게시글 생성에 실패한다.")
+    void test_create_fail_when_content_image_not_used() {
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            "<p>이미지가 없는 본문</p>",
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of(),
+            null,
+            List.of(2L)
+        );
+
+        assertThatThrownBy(() -> postService.create(request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postRepository);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
     }
 
     private PostCreateRequest createRequest(
