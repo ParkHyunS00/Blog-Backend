@@ -84,6 +84,17 @@ public class Post extends BaseEntity {
         this.status = PostStatus.PUBLISHED;
     }
 
+    public void updateDraft(String title, String summary, String content, Category category) {
+        if (status != PostStatus.DRAFT) throw new PostException(PostExceptionCode.INVALID_POST_STATUS);
+
+        validateDraftLength(title, summary);
+
+        this.title = normalizeDraftValue(title);
+        this.summary = normalizeDraftValue(summary);
+        this.content = normalizeDraftValue(content);
+        this.category = category;
+    }
+
     private static void validateDraftLength(String title, String summary) {
         if (title != null && title.trim().length() > MAX_TITLE_LENGTH) {
             throw new PostException(

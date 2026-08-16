@@ -210,4 +210,74 @@ public class PostTest {
 
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
     }
+
+    @Test
+    @DisplayName("초안 게시글의 작성 내용을 수정한다.")
+    void test_update_draft_success() {
+        Category oldCategory = new Category("Spring", "spring");
+        Category newCategory = new Category("Java", "java");
+
+        Post post = Post.createDraft("old title", "old summary", "old content", oldCategory);
+
+        post.updateDraft("new title", "new summary", "new content", newCategory);
+
+        assertThat(post.getTitle()).isEqualTo("new title");
+        assertThat(post.getSummary()).isEqualTo("new summary");
+        assertThat(post.getContent()).isEqualTo("new content");
+        assertThat(post.getCategory()).isSameAs(newCategory);
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("초안 게시글은 작성 내용을 빈 값으로 수정할 수 있다.")
+    void test_update_draft_success_when_content_empty() {
+        Category category = new Category("Spring", "spring");
+
+        Post post = Post.createDraft("title", "summary", "content", category);
+
+        post.updateDraft(null, null, null, null);
+
+        assertThat(post.getTitle()).isEmpty();
+        assertThat(post.getSummary()).isEmpty();
+        assertThat(post.getContent()).isEmpty();
+        assertThat(post.getCategory()).isNull();
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("발행된 게시글은 초안 수정 메서드로 수정할 수 없다.")
+    void test_update_draft_fail_when_post_published() {
+        Category category = new Category("Spring", "spring");
+
+        Post post = Post.publish("title", "summary", "content", category);
+
+        assertThatThrownBy(() -> post.updateDraft(
+            "new title",
+            "new summary",
+            "new content",
+            category
+            ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_STATUS);
+
+        assertThat(post.getTitle()).isEqualTo("title");
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("초안 수정 시 제목이 200자를 초과하면 예외가 발생한다.")
+    void test_update_draft_fail_when_title_too_long() {
+        Post post = Post.createDraft(null, null, null, null);
+
+        assertThatThrownBy(() -> post.updateDraft(
+            "a".repeat(201),
+            null,
+            null,
+            null
+            ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
+    }
 }
