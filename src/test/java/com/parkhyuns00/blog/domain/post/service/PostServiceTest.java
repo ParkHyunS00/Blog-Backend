@@ -877,6 +877,128 @@ public class PostServiceTest {
         verify(postTagRepository).saveAll(List.of());
     }
 
+    @Test
+    @DisplayName("이미지 없이 초안을 수정하면 기존 이미지를 모두 분리한다.")
+    void test_update_draft_detach_all_images_success() {
+        Long postId = 1L;
+        Post draft = Post.createDraft(null, null, null, null);
+
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/old.png", "image/png");
+
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/old.png", "image/png");
+
+        thumbnail.attachTo(draft);
+        contentImage.attachTo(draft);
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of(thumbnail, contentImage));
+
+        postService.updateDraft(postId, request);
+
+        assertThat(thumbnail.getPost()).isNull();
+        assertThat(contentImage.getPost()).isNull();
+
+        verify(postImageRepository).findAllByPostId(postId);
+    }
+
+    @Test
+    @DisplayName("초안 수정 시 요청된 이미지는 유지하거나 새로 연결한다.")
+    void test_update_draft_synchronize_images_success() {
+        Long postId = 1L;
+        Post draft = Post.createDraft(null, null, null, null);
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        PostImage retainedContentImage = new PostImage(PostImageType.CONTENT, "posts/content/retained.png", "image/png");
+        ReflectionTestUtils.setField(retainedContentImage, "id", 2L);
+
+        retainedContentImage.attachTo(draft);
+
+        PostImage newThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/new.png", "image/png");
+        ReflectionTestUtils.setField(newThumbnail, "id", 3L);
+
+        PostImage newContentImage = new PostImage(PostImageType.CONTENT, "posts/content/new.png", "image/png");
+        ReflectionTestUtils.setField(newContentImage, "id", 4L);
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            """
+            <img src="/api/post-images/2" alt="기존 이미지">
+            <img src="/api/post-images/4" alt="새 이미지">
+            """,
+            null,
+            null,
+            3L,
+            List.of(2L, 4L)
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of(retainedContentImage));
+
+        when(postImageRepository.findById(2L)).thenReturn(Optional.of(retainedContentImage));
+        when(postImageRepository.findById(3L)).thenReturn(Optional.of(newThumbnail));
+        when(postImageRepository.findById(4L)).thenReturn(Optional.of(newContentImage));
+
+        postService.updateDraft(postId, request);
+
+        assertThat(retainedContentImage.getPost()).isSameAs(draft);
+        assertThat(newThumbnail.getPost()).isSameAs(draft);
+        assertThat(newContentImage.getPost()).isSameAs(draft);
+    }
+
+    @Test
+    @DisplayName("다른 게시글에 연결된 이미지는 초안에 연결할 수 없다.")
+    void test_update_draft_fail_when_image_attached_to_other_post() {
+        Long postId = 1L;
+        Post draft = Post.createDraft(null, null, null, null);
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        Post otherPost = Post.createDraft("other", "summary", "content", null);
+        ReflectionTestUtils.setField(otherPost, "id", 2L);
+
+        PostImage otherThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/other.png", "image/png");
+        ReflectionTestUtils.setField(otherThumbnail, "id", 3L);
+
+        otherThumbnail.attachTo(otherPost);
+
+        PostDraftUpdateRequest request = new PostDraftUpdateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            3L,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+
+        when(postImageRepository.findById(3L)).thenReturn(Optional.of(otherThumbnail));
+
+        assertThatThrownBy(() -> postService.updateDraft(postId, request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
+
+        assertThat(otherThumbnail.getPost()).isSameAs(otherPost);
+
+        verify(postImageRepository, never()).findAllByPostId(postId);
+        verify(postTagRepository, never()).deleteAllByPostId(postId);
+    }
+
     private PostCreateRequest createRequest(
         PostStatus status,
         String categoryName,

@@ -95,11 +95,18 @@ public class PostService {
         Post draft = postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
 
+        List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
+        validateImageIds(request.thumbnailImageId(), contentImageIds);
+
         String sanitizedContent = sanitizeDraftContent(request.content());
+        validateContentImageIds(sanitizedContent, contentImageIds);
+
         Category category = getDraftCategory(request.categoryName());
         List<Tag> tags = getDraftTags(request.tagNames());
 
         draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
+
+        synchronizeDraftImages(draft, request.thumbnailImageId(), contentImageIds);
 
         replacePostTags(draft, tags);
 
@@ -113,6 +120,59 @@ public class PostService {
     public PostDetailDto getPublishedPost(Long postId) {
         return postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
+    private void synchronizeDraftImages(Post draft, Long thumbnailImageId, List<Long> contentImageIds) {
+        PostImage thumbnail = resolveThumbnailImage(thumbnailImageId, draft);
+        List<PostImage> contentImages = resolveContentImages(contentImageIds, draft);
+        List<PostImage> currentImages = postImageRepository.findAllByPostId(draft.getId());
+
+        Set<Long> requestedImageIds = new HashSet<>(contentImageIds);
+
+        if (thumbnailImageId != null) {
+            requestedImageIds.add(thumbnailImageId);
+        }
+
+        currentImages.stream()
+            .filter(image -> !requestedImageIds.contains(image.getId()))
+            .forEach(PostImage::detach);
+
+        attachIfNecessary(thumbnail, draft);
+
+        contentImages.forEach(image -> attachIfNecessary(image, draft));
+    }
+
+    private PostImage resolveThumbnailImage(Long imageId, Post draft) {
+        if (imageId == null) return null;
+
+        PostImage image = getPostImage(imageId);
+
+        validateImageType(image, PostImageType.THUMBNAIL);
+        validateImageAttachable(image, draft);
+
+        return image;
+    }
+
+    private List<PostImage> resolveContentImages(List<Long> imageIds, Post draft) {
+        return imageIds.stream()
+            .map(this::getPostImage)
+            .peek(image -> {
+                validateImageType(image, PostImageType.CONTENT);
+                validateImageAttachable(image, draft);
+            })
+            .toList();
+    }
+
+    private void validateImageAttachable(PostImage image, Post draft) {
+        if (image.isAttached() && !image.isAttachedTo(draft)) {
+            throw new PostException(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
+        }
+    }
+
+    private void attachIfNecessary(PostImage image, Post draft) {
+        if (image == null || image.isAttachedTo(draft)) return;
+
+        image.attachTo(draft);
     }
 
     private void replacePostTags(Post draft, List<Tag> tags) {
