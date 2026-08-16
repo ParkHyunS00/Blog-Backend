@@ -3,6 +3,7 @@ package com.parkhyuns00.blog.domain.post.service;
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.Post;
@@ -68,6 +69,29 @@ public class PostService {
         return PostCreateDto.from(savedPost);
     }
 
+    @Transactional
+    public PostCreateDto createDraft(PostDraftCreateRequest request) {
+        List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
+        validateImageIds(request.thumbnailImageId(), contentImageIds);
+
+        String sanitizedContent = sanitizeDraftContent(request.content());
+
+        validateContentImageIds(sanitizedContent, contentImageIds);
+
+        Category category = getDraftCategory(request.categoryName());
+        List<Tag> tags = getDraftTags(request.tagNames());
+        Post draft = Post.createDraft(request.title(), request.summary(), sanitizedContent, category);
+
+        Post savedDraft = postRepository.save(draft);
+
+        attachThumbnailImageIfPresent(savedDraft, request.thumbnailImageId());
+        attachContentImages(savedDraft, contentImageIds);
+
+        savePostTags(savedDraft, tags);
+
+        return PostCreateDto.from(savedDraft);
+    }
+
     public Page<PostSummaryDto> getPublishedPosts(PostSearchCondition condition, Pageable pageable) {
         return postRepository.findPublishedPosts(condition, pageable);
     }
@@ -75,6 +99,24 @@ public class PostService {
     public PostDetailDto getPublishedPost(Long postId) {
         return postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
+    private Category getDraftCategory(String categoryName) {
+        if (categoryName == null || categoryName.isBlank()) return null;
+
+        return categoryService.getOrCreateByName(categoryName);
+    }
+
+    private List<Tag> getDraftTags(List<String> tagNames) {
+        if (tagNames == null || tagNames.isEmpty()) return List.of();
+
+        return tagService.getOrCreateAllByNames(tagNames);
+    }
+
+    private String sanitizeDraftContent(String content) {
+        if (content == null || content.isBlank()) return "";
+
+        return htmlSanitizerUtil.sanitize(content);
     }
 
     private List<Long> normalizeContentImageIds(List<Long> contentImageIds) {

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.*;
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.Post;
@@ -72,7 +73,19 @@ public class PostServiceTest {
     @Test
     @DisplayName("게시글을 발행 상태로 생성하면 게시글, 이미지, 태그가 연결된다.")
     void test_create_published_post_success() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of("Java"), 1L, List.of(2L));
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            """
+            <p>게시글 본문</p>
+            <img src="/api/post-images/2" alt="본문 이미지">
+            """,
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of("Java"),
+            1L,
+            List.of(2L)
+        );
 
         Category category = new Category("Spring", "spring");
         Tag tag = new Tag("Java", "java");
@@ -333,7 +346,19 @@ public class PostServiceTest {
     @Test
     @DisplayName("본문 이미지 타입이 CONTENT 가 아니면 예외가 발생한다.")
     void test_create_fail_when_content_image_type_invalid() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of(2L));
+        PostCreateRequest request = new PostCreateRequest(
+            "title",
+            "summary",
+            """
+            <p>본문</p>
+            <img src="/api/post-images/2" alt="본문 이미지">
+            """,
+            PostStatus.PUBLISHED,
+            "Spring",
+            List.of(),
+            1L,
+            List.of(2L)
+        );
 
         Category category = new Category("Spring", "spring");
         PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
@@ -570,6 +595,142 @@ public class PostServiceTest {
         );
 
         assertThatThrownBy(() -> postService.create(request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postRepository);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("작성 내용 없이 게시글 초안을 생성한다.")
+    void test_create_draft_success_when_content_empty() {
+        PostDraftCreateRequest request = new PostDraftCreateRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> {
+            Post post = invocation.getArgument(0);
+            ReflectionTestUtils.setField(
+                post,
+                "id",
+                10L
+            );
+            return post;
+        });
+
+        PostCreateDto result = postService.createDraft(request);
+
+        ArgumentCaptor<Post> postCaptor = ArgumentCaptor.forClass(Post.class);
+
+        verify(postRepository).save(postCaptor.capture());
+
+        Post savedPost = postCaptor.getValue();
+
+        assertThat(result.postId()).isEqualTo(10L);
+        assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
+
+        assertThat(savedPost.getTitle()).isEmpty();
+        assertThat(savedPost.getSummary()).isEmpty();
+        assertThat(savedPost.getContent()).isEmpty();
+        assertThat(savedPost.getCategory()).isNull();
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postImageRepository);
+        verify(postTagRepository).saveAll(List.of());
+    }
+
+    @Test
+    @DisplayName("작성 내용과 이미지가 포함된 게시글 초안을 생성한다.")
+    void test_create_draft_success() {
+        PostDraftCreateRequest request =
+            new PostDraftCreateRequest(
+                "draft title",
+                "draft summary",
+                """
+                <p onclick="alert('xss')">초안 본문</p>
+                <img src="/api/post-images/2" alt="본문 이미지">
+                """,
+                "Spring",
+                List.of("Java"),
+                1L,
+                List.of(2L)
+            );
+
+        Category category = new Category("Spring", "spring");
+        Tag tag = new Tag("Java", "java");
+
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
+
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png");
+
+        when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of("Java"))).thenReturn(List.of(tag));
+        when(postRepository.save(any(Post.class)))
+            .thenAnswer(invocation -> {
+                Post post = invocation.getArgument(0);
+                ReflectionTestUtils.setField(
+                    post,
+                    "id",
+                    10L
+                );
+                return post;
+            });
+        when(postImageRepository.findById(1L)).thenReturn(Optional.of(thumbnail));
+        when(postImageRepository.findById(2L)).thenReturn(Optional.of(contentImage));
+
+        PostCreateDto result = postService.createDraft(request);
+
+        ArgumentCaptor<Post> postCaptor = ArgumentCaptor.forClass(Post.class);
+
+        verify(postRepository).save(postCaptor.capture());
+
+        Post savedDraft = postCaptor.getValue();
+
+        assertThat(result.postId()).isEqualTo(10L);
+        assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
+
+        assertThat(savedDraft.getTitle()).isEqualTo("draft title");
+        assertThat(savedDraft.getSummary()).isEqualTo("draft summary");
+        assertThat(savedDraft.getContent())
+            .contains("<p>초안 본문</p>")
+            .contains("/api/post-images/2")
+            .doesNotContain("onclick")
+            .doesNotContain("alert('xss')");
+        assertThat(savedDraft.getCategory()).isSameAs(category);
+
+        assertThat(thumbnail.getPost()).isSameAs(savedDraft);
+        assertThat(contentImage.getPost()).isSameAs(savedDraft);
+
+        verify(postTagRepository).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("초안 본문 이미지와 요청 이미지 ID가 다르면 생성에 실패한다.")
+    void test_create_draft_fail_when_content_image_mismatched() {
+        PostDraftCreateRequest request =
+            new PostDraftCreateRequest(
+                "title",
+                "summary",
+                "<img src=\"/api/post-images/2\" alt=\"이미지\">",
+                null,
+                null,
+                null,
+                List.of(3L)
+            );
+
+        assertThatThrownBy(() -> postService.createDraft(request))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_IMAGE);
