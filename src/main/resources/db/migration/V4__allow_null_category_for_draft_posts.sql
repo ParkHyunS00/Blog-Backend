@@ -1,0 +1,1 @@
+ALTER TABLE posts MODIFY COLUMN category_id BIGINT NULL;
