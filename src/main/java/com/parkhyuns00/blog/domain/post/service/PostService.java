@@ -112,6 +112,11 @@ public class PostService {
         return PostCreateDto.from(draft);
     }
 
+    public PostDraftDetailDto getDraftPost(Long postId) {
+        return postRepository.findDraftPostById(postId)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
     public Page<PostDraftSummaryDto> getDraftPosts(int page) {
         Pageable pageable = PageRequest.of(page, DRAFT_PAGE_SIZE);
         return postRepository.findDraftPosts(pageable);

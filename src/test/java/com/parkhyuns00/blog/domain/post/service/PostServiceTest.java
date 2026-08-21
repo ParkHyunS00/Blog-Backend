@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -17,10 +18,7 @@ import com.parkhyuns00.blog.domain.post.model.*;
 import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
-import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
@@ -1014,6 +1012,44 @@ public class PostServiceTest {
 
         assertThat(pageable.getPageNumber()).isEqualTo(3);
         assertThat(pageable.getPageSize()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 상세 정보를 조회한다.")
+    void test_get_draft_post_success() {
+        LocalDateTime now = LocalDateTime.now();
+        PostDraftDetailDto detail = new PostDraftDetailDto(
+            1L,
+            "draft title",
+            "draft summary",
+            "<p>draft content</p>",
+            new CategoryDto(10L, "Spring", "spring"),
+            List.of(new TagDto(20L, "Java", "java")),
+            30L,
+            List.of(31L, 32L),
+            now,
+            now);
+
+        when(postRepository.findDraftPostById(1L)).thenReturn(Optional.of(detail));
+
+        PostDraftDetailDto result = postService.getDraftPost(1L);
+
+        assertThat(result).isEqualTo(detail);
+
+        verify(postRepository).findDraftPostById(1L);
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장을 찾을 수 없으면 예외가 발생한다.")
+    void test_get_draft_post_fail_when_not_found() {
+        when(postRepository.findDraftPostById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.getDraftPost(999L))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository).findDraftPostById(999L);
     }
 
     private PostCreateRequest createRequest(
