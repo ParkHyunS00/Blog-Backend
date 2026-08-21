@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -17,10 +18,7 @@ import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostService;
-import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -676,5 +674,82 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.status").value(400));
 
         verify(postService, never()).updateDraft(anyLong(), any(PostDraftUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 목록 조회가 성공하면 페이지 응답을 반환한다.")
+    void test_get_draft_posts_success() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.now();
+
+        PostDraftSummaryDto summary = new PostDraftSummaryDto(
+            1L,
+            "draft title",
+            new CategoryDto(
+                10L,
+                "Spring",
+                "spring"
+            ),
+            List.of(
+                new TagDto(
+                    20L,
+                    "Java",
+                    "java"
+                )
+            ),
+            updatedAt
+        );
+
+        when(postService.getDraftPosts(0)).thenReturn(new PageImpl<>(List.of(summary), PageRequest.of(0, 10), 1));
+
+        mockMvc.perform(
+                get("/api/admin/posts/draft").param("page", "0")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content[0].postId").value(1))
+            .andExpect(jsonPath("$.data.content[0].title").value("draft title"))
+            .andExpect(jsonPath("$.data.content[0].category.categoryId").value(10))
+            .andExpect(jsonPath("$.data.content[0].category.name").value("Spring"))
+            .andExpect(jsonPath("$.data.content[0].category.slug").value("spring"))
+            .andExpect(jsonPath("$.data.content[0].tags[0].tagId").value(20))
+            .andExpect(jsonPath("$.data.content[0].tags[0].name").value("Java"))
+            .andExpect(jsonPath("$.data.content[0].tags[0].slug").value("java"))
+            .andExpect(jsonPath("$.data.content[0].updatedAt").exists())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(10))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.totalPages").value(1))
+            .andExpect(jsonPath("$.data.hasNext").value(false))
+            .andExpect(jsonPath("$.data.hasPrevious").value(false));
+
+        verify(postService).getDraftPosts(0);
+    }
+
+    @Test
+    @DisplayName("임시저장 목록 조회 시 페이지 번호가 없으면 첫 페이지를 조회한다.")
+    void test_get_draft_posts_with_default_page_success() throws Exception {
+        when(postService.getDraftPosts(0))
+            .thenReturn(Page.empty(PageRequest.of(0, 10)));
+
+        mockMvc.perform(get("/api/admin/posts/draft"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(10));
+
+        verify(postService).getDraftPosts(0);
+    }
+
+    @Test
+    @DisplayName("임시저장 목록 조회 시 페이지 번호가 음수이면 400을 반환한다.")
+    void test_get_draft_posts_fail_when_page_negative() throws Exception {
+        mockMvc.perform(
+            get("/api/admin/posts/draft")
+                .param("page", "-1")
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error.code").value("COMMON_001"));
+
+        verify(postService, never()).getDraftPosts(anyInt());
     }
 }
