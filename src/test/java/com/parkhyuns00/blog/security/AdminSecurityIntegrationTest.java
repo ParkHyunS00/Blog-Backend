@@ -16,6 +16,7 @@ import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDraftDetailDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import jakarta.servlet.http.Cookie;
@@ -469,6 +470,54 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.data.totalPages").value(0));
 
         verify(postService).getDraftPosts(0);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 상세 정보를 조회할 수 없다.")
+    void test_unauthenticated_user_cannot_get_draft_post() throws Exception {
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ))
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).getDraftPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장 상세 정보를 조회할 수 있다.")
+    void test_admin_can_get_draft_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        LocalDateTime now = LocalDateTime.now();
+
+        PostDraftDetailDto detail = new PostDraftDetailDto(
+            1L,
+            "draft title",
+            "draft summary",
+            "<p>draft content</p>",
+            null,
+            List.of(),
+            null,
+            List.of(),
+            now,
+            now
+        );
+
+        when(postService.getDraftPost(1L)).thenReturn(detail);
+
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.title").value("draft title"))
+            .andExpect(jsonPath("$.data.content").value("<p>draft content</p>"));
+
+        verify(postService).getDraftPost(1L);
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
