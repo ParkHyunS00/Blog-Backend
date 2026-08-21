@@ -5,6 +5,7 @@ import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
+import com.parkhyuns00.blog.domain.post.event.PostDeletedEvent;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.*;
@@ -16,6 +17,7 @@ import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +45,7 @@ public class PostService {
     private final CategoryService categoryService;
     private final TagService tagService;
     private final HtmlSanitizerUtil htmlSanitizerUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public PostCreateDto create(PostCreateRequest request) {
@@ -112,6 +115,11 @@ public class PostService {
         return PostCreateDto.from(draft);
     }
 
+    @Transactional
+    public void deleteDraft(Long postId) {
+        deletePost(postId, PostStatus.DRAFT);
+    }
+
     public PostDraftDetailDto getDraftPost(Long postId) {
         return postRepository.findDraftPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
@@ -129,6 +137,22 @@ public class PostService {
     public PostDetailDto getPublishedPost(Long postId) {
         return postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
+    private void deletePost(Long postId, PostStatus requiredStatus) {
+        Post post = postRepository.findByIdAndStatus(postId, requiredStatus)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        List<String> imageObjectKeys = postImageRepository
+            .findAllByPostId(postId)
+            .stream()
+            .map(PostImage::getObjectKey)
+            .toList();
+
+        postRepository.delete(post);
+        postRepository.flush();
+
+        eventPublisher.publishEvent(new PostDeletedEvent(imageObjectKeys));
     }
 
     private void synchronizeDraftImages(Post draft, Long thumbnailImageId, List<Long> contentImageIds) {

@@ -12,6 +12,7 @@ import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
+import com.parkhyuns00.blog.domain.post.event.PostDeletedEvent;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.*;
@@ -31,6 +32,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -59,6 +61,9 @@ public class PostServiceTest {
 
     @Mock
     private TagService tagService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PostService postService;
@@ -1050,6 +1055,61 @@ public class PostServiceTest {
             .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
 
         verify(postRepository).findDraftPostById(999L);
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장을 삭제하고 이미지 삭제 이벤트를 발행한다.")
+    void test_delete_draft_success() {
+        Long postId = 1L;
+        Post draft = Post.createDraft("title", "summary", "content", null);
+
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        PostImage thumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "posts/thumbnail/test.png",
+            "image/png"
+        );
+
+        PostImage contentImage = new PostImage(
+            PostImageType.CONTENT,
+            "posts/content/test.png",
+            "image/png"
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of(thumbnail, contentImage));
+
+        postService.deleteDraft(postId);
+
+        verify(postRepository).delete(draft);
+        verify(postRepository).flush();
+
+        ArgumentCaptor<PostDeletedEvent> eventCaptor = ArgumentCaptor.forClass(PostDeletedEvent.class);
+
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+        PostDeletedEvent event = eventCaptor.getValue();
+
+        assertThat(event.imageObjectKeys())
+            .containsExactly("posts/thumbnail/test.png", "posts/content/test.png");
+    }
+
+    @Test
+    @DisplayName("삭제할 게시글 임시저장을 찾을 수 없으면 예외가 발생한다.")
+    void test_delete_draft_fail_when_not_found() {
+        Long postId = 999L;
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.deleteDraft(postId))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository, never()).delete(any(Post.class));
+        verifyNoInteractions(eventPublisher);
+        verifyNoInteractions(postImageRepository);
     }
 
     private PostCreateRequest createRequest(
