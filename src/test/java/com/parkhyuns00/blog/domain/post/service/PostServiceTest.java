@@ -999,6 +999,23 @@ public class PostServiceTest {
         verify(postTagRepository, never()).deleteAllByPostId(postId);
     }
 
+    @Test
+    @DisplayName("게시글 임시저장 목록 조회 시 페이지 크기를 10으로 고정한다.")
+    void test_get_draft_posts_use_fixed_page_size() {
+        when(postRepository.findDraftPosts(any(Pageable.class))).thenReturn(Page.empty());
+
+        postService.getDraftPosts(3);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+
+        verify(postRepository).findDraftPosts(captor.capture());
+
+        Pageable pageable = captor.getValue();
+
+        assertThat(pageable.getPageNumber()).isEqualTo(3);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+    }
+
     private PostCreateRequest createRequest(
         PostStatus status,
         String categoryName,

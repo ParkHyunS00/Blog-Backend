@@ -11,15 +11,13 @@ import com.parkhyuns00.blog.domain.post.model.*;
 import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostRepository;
 import com.parkhyuns00.blog.domain.post.repository.PostTagRepository;
-import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +35,7 @@ import java.util.regex.Pattern;
 public class PostService {
 
     private static final Pattern CONTENT_IMAGE_PATTERN = Pattern.compile("src=\"/api/post-images/([1-9][0-9]*)\"");
+    private static final int DRAFT_PAGE_SIZE = 10;
 
     private final PostRepository postRepository;
     private final PostTagRepository postTagRepository;
@@ -111,6 +110,11 @@ public class PostService {
         replacePostTags(draft, tags);
 
         return PostCreateDto.from(draft);
+    }
+
+    public Page<PostDraftSummaryDto> getDraftPosts(int page) {
+        Pageable pageable = PageRequest.of(page, DRAFT_PAGE_SIZE);
+        return postRepository.findDraftPosts(pageable);
     }
 
     public Page<PostSummaryDto> getPublishedPosts(PostSearchCondition condition, Pageable pageable) {
