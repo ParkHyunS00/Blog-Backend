@@ -9,14 +9,8 @@ import static com.parkhyuns00.blog.domain.tag.model.QTag.tag;
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
-import com.parkhyuns00.blog.domain.post.repository.dto.PostDetailProjection;
-import com.parkhyuns00.blog.domain.post.repository.dto.PostDraftSummaryProjection;
-import com.parkhyuns00.blog.domain.post.repository.dto.PostSummaryProjection;
-import com.parkhyuns00.blog.domain.post.repository.dto.PostTagProjection;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDraftSummaryDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.repository.dto.*;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -125,19 +119,7 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
 
         if (detail == null) return Optional.empty();
 
-        List<PostTagProjection> postTags = queryFactory
-            .select(Projections.constructor(
-                PostTagProjection.class,
-                postTag.post.id,
-                tag.id,
-                tag.name,
-                tag.slug
-            ))
-            .from(postTag)
-            .join(postTag.tag, tag)
-            .where(postTag.post.id.eq(postId))
-            .orderBy(tag.name.asc(), tag.id.asc())
-            .fetch();
+        List<PostTagProjection> postTags = findPostTagsByPostId(postId);
 
         List<TagDto> tags = postTags.stream()
             .map(projection -> new TagDto(
@@ -221,6 +203,78 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .toList();
 
         return new PageImpl<>(content, pageable, totalElements);
+    }
+
+    @Override
+    public Optional<PostDraftDetailDto> findDraftPostById(Long postId) {
+        PostDraftDetailProjection detail = queryFactory.select(
+            Projections.constructor(
+                PostDraftDetailProjection.class,
+                post.id,
+                post.title,
+                post.summary,
+                post.content,
+                category.id,
+                category.name,
+                category.slug,
+                postImage.id,
+                post.createdAt,
+                post.updatedAt
+            ))
+            .from(post)
+            .leftJoin(post.category, category)
+            .leftJoin(postImage)
+            .on(postImage.post.eq(post), postImage.type.eq(PostImageType.THUMBNAIL))
+            .where(post.id.eq(postId), post.status.eq(PostStatus.DRAFT))
+            .fetchOne();
+
+        if (detail == null) return Optional.empty();
+
+        List<PostTagProjection> postTags = findPostTagsByPostId(postId);
+
+        List<TagDto> tags = postTags.stream()
+            .map(projection -> new TagDto(projection.tagId(), projection.name(), projection.slug()))
+            .toList();
+
+        List<Long> contentImageIds = queryFactory
+            .select(postImage.id)
+            .from(postImage)
+            .where(postImage.post.id.eq(postId), postImage.type.eq(PostImageType.CONTENT))
+            .orderBy(postImage.id.asc())
+            .fetch();
+
+        CategoryDto categoryDto = detail.categoryId() == null ? null : new CategoryDto(detail.categoryId(), detail.categoryName(), detail.categorySlug());
+
+        return Optional.of(
+            new PostDraftDetailDto(
+                detail.postId(),
+                detail.title(),
+                detail.summary(),
+                detail.content(),
+                categoryDto,
+                tags,
+                detail.thumbnailImageId(),
+                contentImageIds,
+                detail.createdAt(),
+                detail.updatedAt()
+            )
+        );
+    }
+
+    private List<PostTagProjection> findPostTagsByPostId(Long postId) {
+        return queryFactory.select(
+            Projections.constructor(
+                PostTagProjection.class,
+                postTag.post.id,
+                tag.id,
+                tag.name,
+                tag.slug
+            ))
+            .from(postTag)
+            .join(postTag.tag, tag)
+            .where(postTag.post.id.eq(postId))
+            .orderBy(tag.name.asc(), tag.id.asc())
+            .fetch();
     }
 
     private CategoryDto createCategoryDto(PostDraftSummaryProjection summary) {
