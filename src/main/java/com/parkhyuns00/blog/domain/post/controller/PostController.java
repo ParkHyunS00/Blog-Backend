@@ -5,10 +5,7 @@ import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostRequest;
 import com.parkhyuns00.blog.domain.post.service.PostService;
-import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDraftSummaryDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.global.response.PageResponse;
 import com.parkhyuns00.blog.global.response.StandardResponse;
 import jakarta.validation.Valid;
@@ -47,6 +44,11 @@ public class PostController {
         @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다.") int page
     ) {
         return StandardResponse.ok(PageResponse.from(postService.getDraftPosts(page)));
+    }
+
+    @GetMapping("/api/admin/posts/draft/{postId}")
+    public ResponseEntity<StandardResponse<PostDraftDetailDto>> getDraftPost(@PathVariable Long postId) {
+        return StandardResponse.ok(postService.getDraftPost(postId));
     }
 
     @GetMapping("/api/posts")

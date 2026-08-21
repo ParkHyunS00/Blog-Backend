@@ -752,4 +752,108 @@ public class PostControllerTest {
 
         verify(postService, never()).getDraftPosts(anyInt());
     }
+
+    @Test
+    @DisplayName("게시글 임시저장 상세 조회가 성공하면 에디터 복원 정보를 반환한다.")
+    void test_get_draft_post_success() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        PostDraftDetailDto detail = new PostDraftDetailDto(
+            1L,
+            "draft title",
+            "draft summary",
+            "<p>draft content</p>",
+            new CategoryDto(10L, "Spring", "spring"),
+            List.of(
+                new TagDto(20L, "Java", "java"),
+                new TagDto(21L, "Spring", "spring")
+            ),
+            30L,
+            List.of(31L, 32L),
+            now,
+            now
+        );
+
+        when(postService.getDraftPost(1L)).thenReturn(detail);
+
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.title").value("draft title"))
+            .andExpect(jsonPath("$.data.summary").value("draft summary"))
+            .andExpect(jsonPath("$.data.content").value("<p>draft content</p>"))
+            .andExpect(jsonPath("$.data.category.categoryId").value(10))
+            .andExpect(jsonPath("$.data.category.name").value("Spring"))
+            .andExpect(jsonPath("$.data.category.slug").value("spring"))
+            .andExpect(jsonPath("$.data.tags[0].tagId").value(20))
+            .andExpect(jsonPath("$.data.tags[0].slug").value("java"))
+            .andExpect(jsonPath("$.data.tags[1].tagId").value(21))
+            .andExpect(jsonPath("$.data.thumbnailImageId").value(30))
+            .andExpect(jsonPath("$.data.contentImageIds[0]").value(31))
+            .andExpect(jsonPath("$.data.contentImageIds[1]").value(32))
+            .andExpect(jsonPath("$.data.createdAt").exists())
+            .andExpect(jsonPath("$.data.updatedAt").exists())
+            .andDo(print());
+
+        verify(postService).getDraftPost(1L);
+    }
+
+    @Test
+    @DisplayName("작성 내용과 연관 정보가 없는 게시글 임시저장도 상세 조회한다.")
+    void test_get_empty_draft_post_success() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+
+        PostDraftDetailDto detail = new PostDraftDetailDto(
+            1L,
+            "",
+            "",
+            "",
+            null,
+            List.of(),
+            null,
+            List.of(),
+            now,
+            now
+        );
+
+        when(postService.getDraftPost(1L)).thenReturn(detail);
+
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.title").value(""))
+            .andExpect(jsonPath("$.data.summary").value(""))
+            .andExpect(jsonPath("$.data.content").value(""))
+            .andExpect(jsonPath("$.data.category").doesNotExist())
+            .andExpect(jsonPath("$.data.tags").isEmpty())
+            .andExpect(jsonPath("$.data.thumbnailImageId").doesNotExist())
+            .andExpect(jsonPath("$.data.contentImageIds").isEmpty());
+
+        verify(postService).getDraftPost(1L);
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장을 찾을 수 없으면 404를 반환한다.")
+    void test_get_draft_post_fail_when_not_found() throws Exception {
+        when(postService.getDraftPost(999L)).thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                999L
+            ))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
+
+        verify(postService).getDraftPost(999L);
+    }
 }
