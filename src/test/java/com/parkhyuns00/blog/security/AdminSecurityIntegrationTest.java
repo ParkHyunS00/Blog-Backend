@@ -439,6 +439,38 @@ public class AdminSecurityIntegrationTest {
         verify(postService).updateDraft(eq(1L), any(PostDraftUpdateRequest.class));
     }
 
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 목록을 조회할 수 없다.")
+    void test_unauthenticated_user_cannot_get_draft_posts() throws Exception {
+        mockMvc.perform(get("/api/admin/posts/draft")).andExpect(status().isForbidden());
+
+        verify(postService, never()).getDraftPosts(anyInt());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장 목록을 조회할 수 있다.")
+    void test_admin_can_get_draft_posts() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        when(postService.getDraftPosts(0))
+            .thenReturn(Page.empty(PageRequest.of(0, 10)));
+
+        mockMvc.perform(
+            get("/api/admin/posts/draft")
+                .session(session)
+                .param("page", "0")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content").isEmpty())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(10))
+            .andExpect(jsonPath("$.data.totalElements").value(0))
+            .andExpect(jsonPath("$.data.totalPages").value(0));
+
+        verify(postService).getDraftPosts(0);
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 
