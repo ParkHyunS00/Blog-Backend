@@ -3,14 +3,14 @@ package com.parkhyuns00.blog.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.parkhyuns00.blog.config.security.dto.AdminProperties;
 import com.parkhyuns00.blog.domain.auth.repository.AdminAuthAttemptRepository;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
@@ -381,6 +381,62 @@ public class AdminSecurityIntegrationTest {
         .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
         verify(postService).createDraft(any(PostDraftCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 수정 API에 접근할 수 없다.")
+    void test_unauthenticated_user_cannot_update_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header(
+                    "X-XSRF-TOKEN",
+                    csrfCookie.getValue()
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updateDraft(anyLong(), any(PostDraftUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 수정할 수 있다.")
+    void test_admin_can_update_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.updateDraft(eq(1L), any(PostDraftUpdateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header(
+                    "X-XSRF-TOKEN",
+                    csrfCookie.getValue()
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                      "title": "updated title",
+                      "summary": "updated summary",
+                      "content": "<p>updated content</p>",
+                      "categoryName": null,
+                      "tagNames": [],
+                      "thumbnailImageId": null,
+                      "contentImageIds": []
+                  }
+                  """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(postService).updateDraft(eq(1L), any(PostDraftUpdateRequest.class));
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
