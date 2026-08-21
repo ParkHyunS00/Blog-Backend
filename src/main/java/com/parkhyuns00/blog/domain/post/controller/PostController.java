@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.domain.post.controller;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostRequest;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
@@ -29,6 +30,13 @@ public class PostController {
     @PostMapping("/api/admin/posts/draft")
     public ResponseEntity<StandardResponse<PostCreateDto>> createDraft(@Valid @RequestBody PostDraftCreateRequest request) {
         return StandardResponse.created(postService.createDraft(request));
+    }
+
+    @PutMapping("/api/admin/posts/draft/{postId}")
+    public ResponseEntity<StandardResponse<PostCreateDto>> updateDraft(
+        @PathVariable Long postId, @Valid @RequestBody PostDraftUpdateRequest request
+    ) {
+        return StandardResponse.ok(postService.updateDraft(postId, request));
     }
 
     @GetMapping("/api/posts")

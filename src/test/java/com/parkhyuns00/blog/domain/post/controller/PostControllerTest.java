@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
@@ -595,5 +597,84 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.status").value(400));
 
         verify(postService, never()).createDraft(any(PostDraftCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 수정 요청이 성공하면 수정 결과를 반환한다.")
+    void test_update_draft_success() throws Exception {
+        when(postService.updateDraft(eq(1L), any(PostDraftUpdateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                      "title": "updated title",
+                      "summary": "updated summary",
+                      "content": "<p>updated content</p>",
+                      "categoryName": "Spring",
+                      "tagNames": ["Java", "Spring"],
+                      "thumbnailImageId": 1,
+                      "contentImageIds": [2, 3]
+                  }
+                  """)
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andDo(print());
+
+        ArgumentCaptor<PostDraftUpdateRequest> captor = ArgumentCaptor.forClass(PostDraftUpdateRequest.class);
+
+        verify(postService).updateDraft(eq(1L), captor.capture());
+
+        PostDraftUpdateRequest request = captor.getValue();
+
+        assertThat(request.title()).isEqualTo("updated title");
+        assertThat(request.summary()).isEqualTo("updated summary");
+        assertThat(request.content()).isEqualTo("<p>updated content</p>");
+        assertThat(request.categoryName()).isEqualTo("Spring");
+        assertThat(request.tagNames()).containsExactly("Java", "Spring");
+        assertThat(request.thumbnailImageId()).isEqualTo(1L);
+        assertThat(request.contentImageIds()).containsExactly(2L, 3L);
+    }
+
+    @Test
+    @DisplayName("작성 내용을 비운 상태로 게시글 임시저장을 수정할 수 있다.")
+    void test_update_draft_success_when_content_empty() throws Exception {
+        when(postService.updateDraft(eq(1L), any(PostDraftUpdateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(postService).updateDraft(eq(1L), any(PostDraftUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("임시저장 수정 제목이 200자를 초과하면 400 응답을 반환한다.")
+    void test_update_draft_fail_when_title_too_long() throws Exception {
+        String title = "a".repeat(201);
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                      "title": "%s"
+                  }
+                  """.formatted(title)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+
+        verify(postService, never()).updateDraft(anyLong(), any(PostDraftUpdateRequest.class));
     }
 }
