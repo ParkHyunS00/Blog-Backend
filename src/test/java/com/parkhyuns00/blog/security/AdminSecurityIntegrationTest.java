@@ -520,6 +520,61 @@ public class AdminSecurityIntegrationTest {
         verify(postService).getDraftPost(1L);
     }
 
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 삭제할 수 없다.")
+    void test_unauthenticated_user_cannot_delete_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deleteDraft(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 게시글 임시저장을 삭제할 수 없다.")
+    void test_admin_cannot_delete_draft_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .session(session)
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deleteDraft(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 삭제할 수 있다.")
+    void test_admin_can_delete_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        doNothing().when(postService).deleteDraft(1L);
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
+
+        verify(postService).deleteDraft(1L);
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 
