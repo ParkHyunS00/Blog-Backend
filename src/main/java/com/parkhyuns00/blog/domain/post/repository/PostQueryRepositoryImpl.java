@@ -6,12 +6,15 @@ import static com.parkhyuns00.blog.domain.post.model.QPostImage.postImage;
 import static com.parkhyuns00.blog.domain.post.model.QPostTag.postTag;
 import static com.parkhyuns00.blog.domain.tag.model.QTag.tag;
 
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.repository.dto.PostDetailProjection;
+import com.parkhyuns00.blog.domain.post.repository.dto.PostDraftSummaryProjection;
 import com.parkhyuns00.blog.domain.post.repository.dto.PostSummaryProjection;
 import com.parkhyuns00.blog.domain.post.repository.dto.PostTagProjection;
 import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDraftSummaryDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
 import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
@@ -167,6 +170,91 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             detail.createdAt(),
             detail.updatedAt()
         ));
+    }
+
+    @Override
+    public Page<PostDraftSummaryDto> findDraftPosts(Pageable pageable) {
+        List<PostDraftSummaryProjection> summaries = queryFactory.select(
+            Projections.constructor(
+                PostDraftSummaryProjection.class,
+                post.id,
+                post.title,
+                category.id,
+                category.name,
+                category.slug,
+                post.updatedAt
+            ))
+            .from(post)
+            .leftJoin(post.category, category)
+            .where(post.status.eq(PostStatus.DRAFT))
+            .orderBy(post.updatedAt.desc(), post.id.desc())
+            .offset(pageable.getOffset())
+            .limit(pageable.getPageSize())
+            .fetch();
+
+        Long total = queryFactory
+            .select(post.count())
+            .from(post)
+            .where(post.status.eq(PostStatus.DRAFT))
+            .fetchOne();
+
+        long totalElements = total == null ? 0 : total;
+
+        if (summaries.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, totalElements);
+        }
+
+        List<Long> postIds = summaries.stream()
+            .map(PostDraftSummaryProjection::postId)
+            .toList();
+
+        Map<Long, List<TagDto>> tagsByPostId = findTagsByPostIds(postIds);
+
+        List<PostDraftSummaryDto> content = summaries.stream()
+            .map(summary -> new PostDraftSummaryDto(
+                summary.postId(),
+                summary.title(),
+                createCategoryDto(summary),
+                tagsByPostId.getOrDefault(summary.postId(), List.of()),
+                summary.updatedAt()
+            ))
+            .toList();
+
+        return new PageImpl<>(content, pageable, totalElements);
+    }
+
+    private CategoryDto createCategoryDto(PostDraftSummaryProjection summary) {
+        if (summary.categoryId() == null) return null;
+
+        return new CategoryDto(summary.categoryId(), summary.categoryName(), summary.categorySlug());
+    }
+
+    private Map<Long, List<TagDto>> findTagsByPostIds(List<Long> postIds) {
+        List<PostTagProjection> postTags = queryFactory
+            .select(
+                Projections.constructor(
+                    PostTagProjection.class,
+                    postTag.post.id,
+                    tag.id,
+                    tag.name,
+                    tag.slug
+                )
+            )
+            .from(postTag)
+            .join(postTag.tag, tag)
+            .where(postTag.post.id.in(postIds))
+            .orderBy(tag.name.asc(), tag.id.asc())
+            .fetch();
+
+        return postTags.stream()
+            .collect(
+                Collectors.groupingBy(
+                    PostTagProjection::postId,
+                    Collectors.mapping(
+                        projection -> new TagDto(projection.tagId(), projection.name(), projection.slug()),
+                        Collectors.toList()
+                    )
+                ));
     }
 
     private Page<PostSummaryDto> findPublishedPostsByKeyword(String keyword, Pageable pageable) {
