@@ -10,12 +10,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PostDeletedEventListener {
+public class PostImageCleanupEventListener {
 
     private final GarageUtil garageUtil;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handle(PostDeletedEvent event) {
+    public void handle(PostImageCleanupEvent event) {
         for (String objectKey : event.imageObjectKeys()) {
             try {
                 garageUtil.deleteObject(objectKey);

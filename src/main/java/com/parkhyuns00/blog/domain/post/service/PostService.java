@@ -5,7 +5,7 @@ import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
-import com.parkhyuns00.blog.domain.post.event.PostDeletedEvent;
+import com.parkhyuns00.blog.domain.post.event.PostImageCleanupEvent;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.*;
@@ -152,7 +152,7 @@ public class PostService {
         postRepository.delete(post);
         postRepository.flush();
 
-        eventPublisher.publishEvent(new PostDeletedEvent(imageObjectKeys));
+        eventPublisher.publishEvent(new PostImageCleanupEvent(imageObjectKeys));
     }
 
     private void synchronizeDraftImages(Post draft, Long thumbnailImageId, List<Long> contentImageIds) {

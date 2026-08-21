@@ -12,7 +12,7 @@ import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
-import com.parkhyuns00.blog.domain.post.event.PostDeletedEvent;
+import com.parkhyuns00.blog.domain.post.event.PostImageCleanupEvent;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.*;
@@ -1085,11 +1085,11 @@ public class PostServiceTest {
         verify(postRepository).delete(draft);
         verify(postRepository).flush();
 
-        ArgumentCaptor<PostDeletedEvent> eventCaptor = ArgumentCaptor.forClass(PostDeletedEvent.class);
+        ArgumentCaptor<PostImageCleanupEvent> eventCaptor = ArgumentCaptor.forClass(PostImageCleanupEvent.class);
 
         verify(eventPublisher).publishEvent(eventCaptor.capture());
 
-        PostDeletedEvent event = eventCaptor.getValue();
+        PostImageCleanupEvent event = eventCaptor.getValue();
 
         assertThat(event.imageObjectKeys())
             .containsExactly("posts/thumbnail/test.png", "posts/content/test.png");

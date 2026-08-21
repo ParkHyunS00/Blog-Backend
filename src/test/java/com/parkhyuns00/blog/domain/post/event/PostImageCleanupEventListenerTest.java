@@ -8,15 +8,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-public class PostDeletedEventListenerTest {
+public class PostImageCleanupEventListenerTest {
 
     private final GarageUtil garageUtil = mock(GarageUtil.class);
-    private final PostDeletedEventListener listener = new PostDeletedEventListener(garageUtil);
+    private final PostImageCleanupEventListener listener = new PostImageCleanupEventListener(garageUtil);
 
     @Test
     @DisplayName("게시글 삭제 후 연결된 Garage 이미지 객체를 삭제한다.")
     void test_handle_post_deleted_event_success() {
-        PostDeletedEvent event = new PostDeletedEvent(List.of("posts/thumbnail/test.png", "posts/content/test.png"));
+        PostImageCleanupEvent event = new PostImageCleanupEvent(List.of("posts/thumbnail/test.png", "posts/content/test.png"));
 
         listener.handle(event);
 
@@ -31,7 +31,7 @@ public class PostDeletedEventListenerTest {
             .when(garageUtil)
             .deleteObject("posts/thumbnail/test.png");
 
-        PostDeletedEvent event = new PostDeletedEvent(List.of("posts/thumbnail/test.png", "posts/content/test.png"));
+        PostImageCleanupEvent event = new PostImageCleanupEvent(List.of("posts/thumbnail/test.png", "posts/content/test.png"));
 
         listener.handle(event);
 
