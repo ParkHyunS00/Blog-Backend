@@ -57,7 +57,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": "summary",
                     "content": "content",
-                    "status": "PUBLISHED",
                     "categoryName": "Spring",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": 1,
@@ -77,7 +76,6 @@ public class PostControllerTest {
         assertThat(request.title()).isEqualTo("title");
         assertThat(request.summary()).isEqualTo("summary");
         assertThat(request.content()).isEqualTo("content");
-        assertThat(request.status()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(request.categoryName()).isEqualTo("Spring");
         assertThat(request.tagNames()).containsExactly("Java", "Spring");
         assertThat(request.thumbnailImageId()).isEqualTo(1L);
@@ -94,7 +92,6 @@ public class PostControllerTest {
                     "title": "   ",
                     "summary": "summary",
                     "content": "content",
-                    "status": "PUBLISHED",
                     "categoryName": "Spring",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": 1,
@@ -118,7 +115,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": " ",
                     "content": "content",
-                    "status": "PUBLISHED",
                     "categoryName": "Spring",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": 1,
@@ -142,31 +138,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": "summary",
                     "content": "     ",
-                    "status": "PUBLISHED",
-                    "categoryName": "Spring",
-                    "tagNames": ["Java", "Spring"],
-                    "thumbnailImageId": 1,
-                    "contentImageIds": [2, 3]
-                }
-                """))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.status").value(400))
-            .andDo(print());
-
-        verify(postService, never()).create(any(PostCreateRequest.class));
-    }
-
-    @Test
-    @DisplayName("게시글 상태가 null 이면 400 응답을 반환한다.")
-    void test_create_post_fail_when_status_null() throws Exception {
-        mockMvc.perform(post("/api/admin/posts")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                {
-                    "title": "title",
-                    "summary": "summary",
-                    "content": "summary",
-                    "status": null,
                     "categoryName": "Spring",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": 1,
@@ -190,7 +161,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": "summary",
                     "content": "summary",
-                    "status": "PUBLISHED",
                     "categoryName": "  ",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": 1,
@@ -216,7 +186,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": "summary",
                     "content": "summary",
-                    "status": "PUBLISHED",
                     "categoryName": "Spring",
                     "tagNames": ["Java", "Spring"],
                     "thumbnailImageId": null,
@@ -239,7 +208,7 @@ public class PostControllerTest {
     @Test
     @DisplayName("태그 목록과 본문 이미지 목록이 null 이어도 게시글 생성은 성공한다.")
     void test_create_post_success_when_optional_list_null() throws Exception {
-        when(postService.create(any(PostCreateRequest.class))).thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+        when(postService.create(any(PostCreateRequest.class))).thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
 
         mockMvc.perform(post("/api/admin/posts")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -248,7 +217,6 @@ public class PostControllerTest {
                     "title": "title",
                     "summary": "summary",
                     "content": "summary",
-                    "status": "PUBLISHED",
                     "categoryName": "Spring",
                     "tagNames": null,
                     "thumbnailImageId": 1,
@@ -258,7 +226,7 @@ public class PostControllerTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.data.postId").value(1))
-            .andExpect(jsonPath("$.data.status").value("DRAFT"))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
             .andDo(print());
 
         verify(postService).create(any(PostCreateRequest.class));

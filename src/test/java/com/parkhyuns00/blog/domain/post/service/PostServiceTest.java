@@ -72,8 +72,8 @@ public class PostServiceTest {
     private HtmlSanitizerUtil htmlSanitizerUtil;
 
     @Test
-    @DisplayName("게시글을 발행 상태로 생성하면 게시글, 이미지, 태그가 연결된다.")
-    void test_create_published_post_success() {
+    @DisplayName("게시글을 생성하면 발행 상태로 저장하고 이미지와 태그를 연결한다.")
+    void test_create_post_success() {
         PostCreateRequest request = new PostCreateRequest(
             "title",
             "summary",
@@ -81,7 +81,6 @@ public class PostServiceTest {
             <p>게시글 본문</p>
             <img src="/api/post-images/2" alt="본문 이미지">
             """,
-            PostStatus.PUBLISHED,
             "Spring",
             List.of("Java"),
             1L,
@@ -119,37 +118,9 @@ public class PostServiceTest {
     }
 
     @Test
-    @DisplayName("게시글을 초안 상태로 생성하면 DRAFT 상태로 저장된다.")
-    void test_create_draft_post_success() {
-        PostCreateRequest request = createRequest(PostStatus.DRAFT, "Spring", List.of(), 1L, List.of());
-
-        Category category = new Category("Spring", "spring");
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
-
-        when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
-        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
-        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> {
-            Post post = invocation.getArgument(0);
-            ReflectionTestUtils.setField(post, "id", 10L);
-            return post;
-        });
-        when(postImageRepository.findById(1L)).thenReturn(Optional.of(thumbnail));
-
-        PostCreateDto result = postService.create(request);
-
-        assertThat(result.postId()).isEqualTo(10L);
-        assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
-        assertThat(thumbnail.getPost()).isNotNull();
-
-        verify(postRepository).save(any(Post.class));
-        verify(postImageRepository).findById(1L);
-        verify(postTagRepository).saveAll(List.of());
-    }
-
-    @Test
     @DisplayName("본문 이미지 목록이 null 이면 본문 이미지 없이 게시글을 생성한다.")
     void test_create_success_when_content_image_null() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, null);
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, null);
 
         Category category = new Category("Spring", "spring");
         PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
@@ -175,26 +146,9 @@ public class PostServiceTest {
     }
 
     @Test
-    @DisplayName("게시글 상태가 null 이면 예외가 발생한다.")
-    void test_create_fail_when_status_null() {
-        PostCreateRequest request = createRequest(null, "Spring", List.of(), 1L, List.of());
-
-        assertThatThrownBy(() -> postService.create(request))
-            .isInstanceOf(PostException.class)
-            .extracting("exceptionCode")
-            .isEqualTo(PostExceptionCode.INVALID_POST_STATUS);
-
-        verifyNoInteractions(categoryService);
-        verifyNoInteractions(tagService);
-        verifyNoInteractions(postRepository);
-        verifyNoInteractions(postImageRepository);
-        verifyNoInteractions(postTagRepository);
-    }
-
-    @Test
     @DisplayName("카테고리가 null 이면 예외가 발생한다.")
     void test_create_fail_when_category_name_null() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, null, List.of(), 1L, List.of());
+        PostCreateRequest request = createRequest(null, List.of(), 1L, List.of());
 
         assertThatThrownBy(() -> postService.create(request))
             .isInstanceOf(PostException.class)
@@ -211,7 +165,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("카테고리 이름이 공백이면 예외가 발생한다.")
     void test_create_fail_when_category_name_blank() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "  ", List.of(), 1L, List.of());
+        PostCreateRequest request = createRequest("  ", List.of(), 1L, List.of());
 
         assertThatThrownBy(() -> postService.create(request))
             .isInstanceOf(PostException.class)
@@ -228,7 +182,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("썸네일 이미지가 없어도 게시글을 생성한다.")
     void test_create_when_thumbnail_image_null() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), null, List.of());
+        PostCreateRequest request = createRequest("Spring", List.of(), null, List.of());
 
         Category category = new Category("Spring", "spring");
 
@@ -253,7 +207,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("본문 이미지 목록에 null 이 포함되면 예외가 발생한다.")
     void test_create_fail_when_content_image_contains_null() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, Arrays.asList(2L, null));
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, Arrays.asList(2L, null));
 
         assertThatThrownBy(() -> postService.create(request))
             .isInstanceOf(PostException.class)
@@ -270,7 +224,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("본문 이미지 id 가 중복되면 예외가 발생한다.")
     void test_create_fail_when_content_image_duplicated() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of(2L, 2L));
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of(2L, 2L));
 
         assertThatThrownBy(() -> postService.create(request))
             .isInstanceOf(PostException.class)
@@ -287,7 +241,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("썸네일 이미지 id 가 본문 이미지에 포함되면 예외가 발생한다.")
     void test_create_fail_when_thumbnail_id_in_content_image() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of(1L));
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of(1L));
 
         assertThatThrownBy(() -> postService.create(request))
             .isInstanceOf(PostException.class)
@@ -304,7 +258,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("게시글 이미지가 존재하지 않으면 예외가 발생한다.")
     void test_create_fail_when_image_not_found() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of());
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of());
 
         Category category = new Category("Spring", "spring");
 
@@ -326,7 +280,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("썸네일 이미지 타입이 THUMBNAIL 이 아니면 예외가 발생한다.")
     void test_create_fail_when_thumbnail_image_type_invalid() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of());
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of());
 
         Category category = new Category("Spring", "spring");
         PostImage thumbnail = new PostImage(PostImageType.CONTENT, "posts/thumbnail/test.png", "image/png");
@@ -351,10 +305,9 @@ public class PostServiceTest {
             "title",
             "summary",
             """
-            <p>본문</p>
+            <p>게시글 본문</p>
             <img src="/api/post-images/2" alt="본문 이미지">
             """,
-            PostStatus.PUBLISHED,
             "Spring",
             List.of(),
             1L,
@@ -385,7 +338,7 @@ public class PostServiceTest {
     @Test
     @DisplayName("이미 연결된 이미지를 사용하면 예외가 발생한다.")
     void test_create_fail_when_image_already_attached() {
-        PostCreateRequest request = createRequest(PostStatus.PUBLISHED, "Spring", List.of(), 1L, List.of());
+        PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of());
 
         Category category = new Category("Spring", "spring");
         PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/a.png", "image/png");
@@ -492,7 +445,6 @@ public class PostServiceTest {
             <script>alert('xss')</script>
             <pre><code class="language-java">int number = 1;</code></pre>
             """,
-            PostStatus.PUBLISHED,
             "Spring",
             List.of(),
             null,
@@ -536,7 +488,6 @@ public class PostServiceTest {
             <script>alert('xss')</script>
             <iframe src="https://evil.example"></iframe>
             """,
-            PostStatus.PUBLISHED,
             "Spring",
             List.of(),
             null,
@@ -562,7 +513,6 @@ public class PostServiceTest {
             "title",
             "summary",
             "<p>본문</p><img src=\"/api/post-images/2\" alt=\"이미지\">",
-            PostStatus.PUBLISHED,
             "Spring",
             List.of(),
             null,
@@ -588,7 +538,6 @@ public class PostServiceTest {
             "title",
             "summary",
             "<p>이미지가 없는 본문</p>",
-            PostStatus.PUBLISHED,
             "Spring",
             List.of(),
             null,
@@ -1113,7 +1062,6 @@ public class PostServiceTest {
     }
 
     private PostCreateRequest createRequest(
-        PostStatus status,
         String categoryName,
         List<String> tagNames,
         Long thumbnailImageId,
@@ -1123,7 +1071,6 @@ public class PostServiceTest {
             "title",
             "summary",
             "content",
-            status,
             categoryName,
             tagNames,
             thumbnailImageId,

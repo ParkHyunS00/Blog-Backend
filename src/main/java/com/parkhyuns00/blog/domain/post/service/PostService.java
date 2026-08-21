@@ -59,7 +59,7 @@ public class PostService {
         Category category = categoryService.getOrCreateByName(request.categoryName());
         List<Tag> tags = tagService.getOrCreateAllByNames(request.tagNames());
 
-        Post post = createPost(request, category, sanitizedContent);
+        Post post = Post.publish(request.title(), request.summary(), sanitizedContent, category);
         Post savedPost = postRepository.save(post);
 
         attachThumbnailImageIfPresent(savedPost, request.thumbnailImageId());
@@ -236,13 +236,6 @@ public class PostService {
         return contentImageIds == null ? List.of() : contentImageIds;
     }
 
-    private Post createPost(PostCreateRequest request, Category category, String content) {
-        return switch (request.status()) {
-            case DRAFT -> Post.createDraft(request.title(), request.summary(), content, category);
-            case PUBLISHED -> Post.publish(request.title(), request.summary(), content, category);
-        };
-    }
-
     private void savePostTags(Post post, List<Tag> tags) {
         List<PostTag> postTags = tags.stream()
             .map(tag -> new PostTag(post, tag))
@@ -292,10 +285,6 @@ public class PostService {
     }
 
     private void validateCreateRequest(PostCreateRequest request, List<Long> contentImageIds) {
-        if (request.status() == null) {
-            throw new PostException(PostExceptionCode.INVALID_POST_STATUS);
-        }
-
         if (request.categoryName() == null || request.categoryName().isBlank()) {
             throw new PostException(PostExceptionCode.INVALID_POST_CATEGORY);
         }

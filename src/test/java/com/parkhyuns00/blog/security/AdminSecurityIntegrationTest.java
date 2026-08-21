@@ -629,7 +629,6 @@ public class AdminSecurityIntegrationTest {
             "title": "title",
             "summary": "summary",
             "content": "content",
-            "status": "PUBLISHED",
             "categoryName": "Spring",
             "tagNames": ["Java"],
             "thumbnailImageId": 1,
