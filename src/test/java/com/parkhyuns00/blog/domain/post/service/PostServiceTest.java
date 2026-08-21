@@ -1061,6 +1061,78 @@ public class PostServiceTest {
         verifyNoInteractions(postImageRepository);
     }
 
+    @Test
+    @DisplayName("게시글 임시저장에 최종 내용을 반영하고 발행한다.")
+    void test_publish_draft_success() {
+        Long postId = 1L;
+        Category oldCategory = new Category("Draft Category", "draft-category");
+        Category newCategory = new Category("Backend", "backend");
+        Post draft = Post.createDraft(
+            "임시 제목",
+            "임시 요약",
+            "<p>임시 본문</p>",
+            oldCategory
+        );
+
+        ReflectionTestUtils.setField(draft, "id", postId);
+
+        PostCreateRequest request = new PostCreateRequest(
+            "최종 제목",
+            "최종 요약",
+            "<p>최종 본문</p>",
+            "Backend",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
+        when(categoryService.getOrCreateByName("Backend")).thenReturn(newCategory);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of());
+
+        PostCreateDto result = postService.publishDraft(postId, request);
+
+        assertThat(result.postId()).isEqualTo(postId);
+        assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(draft.getTitle()).isEqualTo("최종 제목");
+        assertThat(draft.getSummary()).isEqualTo("최종 요약");
+        assertThat(draft.getContent()).isEqualTo("<p>최종 본문</p>");
+        assertThat(draft.getCategory()).isSameAs(newCategory);
+        assertThat(draft.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+
+        verify(postImageRepository).findAllByPostId(postId);
+        verify(postTagRepository).deleteAllByPostId(postId);
+        verify(postTagRepository).saveAll(List.of());
+        verify(postRepository, never()).save(any(Post.class));
+    }
+
+    @Test
+    @DisplayName("발행할 게시글 임시저장을 찾을 수 없으면 예외가 발생한다.")
+    void test_publish_draft_fail_when_not_found() {
+        Long postId = 999L;
+        PostCreateRequest request = createRequest(
+            "Backend",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+            postService.publishDraft(postId, request)
+        )
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
     private PostCreateRequest createRequest(
         String categoryName,
         List<String> tagNames,

@@ -575,6 +575,72 @@ public class AdminSecurityIntegrationTest {
         verify(postService).deleteDraft(1L);
     }
 
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 발행할 수 없다.")
+    void test_unauthenticated_user_cannot_publish_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).publishDraft(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 게시글 임시저장을 발행할 수 없다.")
+    void test_admin_cannot_publish_draft_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L
+            )
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).publishDraft(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 발행할 수 있다.")
+    void test_admin_can_publish_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.publishDraft(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L
+            )
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(postService).publishDraft(eq(1L), any(PostCreateRequest.class));
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 

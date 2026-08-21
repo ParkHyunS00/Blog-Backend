@@ -38,6 +38,13 @@ public class PostController {
         return StandardResponse.ok(postService.updateDraft(postId, request));
     }
 
+    @PostMapping("/api/admin/posts/draft/{postId}/publish")
+    public ResponseEntity<StandardResponse<PostCreateDto>> publishDraft(
+        @PathVariable Long postId, @Valid @RequestBody PostCreateRequest request
+    ) {
+        return StandardResponse.ok(postService.publishDraft(postId, request));
+    }
+
     @GetMapping("/api/admin/posts/draft")
     public ResponseEntity<StandardResponse<PageResponse<PostDraftSummaryDto>>> getDraftPosts(
         @RequestParam(defaultValue = "0")

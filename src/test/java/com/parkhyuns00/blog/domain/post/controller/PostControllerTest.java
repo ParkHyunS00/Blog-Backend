@@ -861,4 +861,101 @@ public class PostControllerTest {
 
         verify(postService).deleteDraft(999L);
     }
+
+    @Test
+    @DisplayName("게시글 임시저장 발행 요청이 성공하면 최종 내용을 반영한 결과를 반환한다.")
+    void test_publish_draft_success() throws Exception {
+        when(postService.publishDraft(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            post("/api/admin/posts/draft/{postId}/publish", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                    "title": "최종 제목",
+                    "summary": "최종 요약",
+                    "content": "<p>최종 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": ["Java", "Spring"],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                    }
+                    """)
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
+            .andDo(print());
+
+        ArgumentCaptor<PostCreateRequest> requestCaptor = ArgumentCaptor.forClass(PostCreateRequest.class);
+
+        verify(postService).publishDraft(eq(1L), requestCaptor.capture());
+
+        PostCreateRequest request = requestCaptor.getValue();
+
+        assertThat(request.title()).isEqualTo("최종 제목");
+        assertThat(request.summary()).isEqualTo("최종 요약");
+        assertThat(request.content()).isEqualTo("<p>최종 본문</p>");
+        assertThat(request.categoryName()).isEqualTo("Backend");
+        assertThat(request.tagNames()).containsExactly("Java", "Spring");
+        assertThat(request.thumbnailImageId()).isNull();
+        assertThat(request.contentImageIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 발행 요청의 제목이 공백이면 400 응답을 반환한다.")
+    void test_publish_draft_fail_when_title_blank() throws Exception {
+
+        mockMvc.perform(
+            post("/api/admin/posts/draft/{postId}/publish", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                    "title": " ",
+                    "summary": "최종 요약",
+                    "content": "<p>최종 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": [],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                    }
+                  """)
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andDo(print());
+
+        verify(postService, never()).publishDraft(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("발행할 게시글 임시저장을 찾을 수 없으면 404 응답을 반환한다.")
+    void test_publish_draft_fail_when_not_found() throws Exception {
+        when(postService.publishDraft(eq(999L), any(PostCreateRequest.class)))
+            .thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        mockMvc.perform(
+            post("/api/admin/posts/draft/{postId}/publish", 999L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                    "title": "최종 제목",
+                    "summary": "최종 요약",
+                    "content": "<p>최종 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": [],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                    }
+                    """)
+            )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andDo(print());
+
+        verify(postService).publishDraft(eq(999L), any(PostCreateRequest.class));
+    }
 }

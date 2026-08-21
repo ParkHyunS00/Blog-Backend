@@ -116,6 +116,33 @@ public class PostService {
     }
 
     @Transactional
+    public PostCreateDto publishDraft(Long postId, PostCreateRequest request) {
+        Post draft = postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
+        validateCreateRequest(request, contentImageIds);
+
+        String sanitizedContent = htmlSanitizerUtil.sanitize(request.content());
+        validateSanitizedContent(sanitizedContent);
+
+        validateContentImageIds(sanitizedContent, contentImageIds);
+
+        Category category = categoryService.getOrCreateByName(request.categoryName());
+
+        List<Tag> tags = tagService.getOrCreateAllByNames(request.tagNames());
+
+        draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
+        draft.publish();
+
+        synchronizeDraftImages(draft, request.thumbnailImageId(), contentImageIds);
+
+        replacePostTags(draft, tags);
+
+        return PostCreateDto.from(draft);
+    }
+
+    @Transactional
     public void deleteDraft(Long postId) {
         deletePost(postId, PostStatus.DRAFT);
     }
