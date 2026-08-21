@@ -10,6 +10,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -92,6 +93,35 @@ public class GlobalControllerAdvice {
             .toList();
 
         log.warn("[ConstraintViolationException] errors={}", detailErrors);
+
+        return StandardResponse.fail(CommonExceptionCode.INVALID_REQUEST, detailErrors);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<StandardResponse<Void>> handleHandlerMethodValidationException(
+        HandlerMethodValidationException exception
+    ) {
+        List<DetailError> detailErrors = exception
+                .getParameterValidationResults()
+                .stream()
+                .map(result -> {
+                    String parameterName = result.getMethodParameter().getParameterName();
+
+                    List<String> messages = result
+                            .getResolvableErrors()
+                            .stream()
+                            .map(error ->
+                                error.getDefaultMessage() == null
+                                    ? "Invalid Value"
+                                    : error.getDefaultMessage()
+                            )
+                            .toList();
+
+                    return new DetailError(parameterName == null ? "parameter" : parameterName, messages);
+                })
+                .toList();
+
+        log.warn("[HandlerMethodValidationException] errors={}", detailErrors);
 
         return StandardResponse.fail(CommonExceptionCode.INVALID_REQUEST, detailErrors);
     }
