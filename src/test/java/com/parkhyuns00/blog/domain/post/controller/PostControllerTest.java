@@ -3,12 +3,10 @@ package com.parkhyuns00.blog.domain.post.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
@@ -855,5 +853,44 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
 
         verify(postService).getDraftPost(999L);
+    }
+
+    @Test
+    @DisplayName("게시글 임시저장 삭제 요청이 성공하면 200을 반환한다.")
+    void test_delete_draft_success() throws Exception {
+        doNothing()
+            .when(postService)
+            .deleteDraft(1L);
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(postService).deleteDraft(1L);
+    }
+
+    @Test
+    @DisplayName("삭제할 게시글 임시저장을 찾을 수 없으면 404를 반환한다.")
+    void test_delete_draft_fail_when_not_found() throws Exception {
+        doThrow(new PostException(PostExceptionCode.POST_NOT_FOUND))
+            .when(postService)
+            .deleteDraft(999L);
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                999L
+            ))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
+
+        verify(postService).deleteDraft(999L);
     }
 }
