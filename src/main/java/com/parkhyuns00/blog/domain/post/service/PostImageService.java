@@ -10,9 +10,7 @@ import com.parkhyuns00.blog.domain.post.service.dto.PostImageUploadDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.parkhyuns00.blog.util.TikaUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
@@ -48,23 +46,8 @@ public class PostImageService {
         }
     }
 
-    @Transactional
     public void delete(Long imageId) {
-        PostImage postImage = postImageRepository.findById(imageId)
-            .orElseThrow(() -> new PostException(PostExceptionCode.POST_IMAGE_NOT_FOUND));
-
-        if (postImage.isAttached()) {
-            throw new PostException(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
-        }
-
-        garageUtil.deleteObject(postImage.getObjectKey());
-
-        try {
-            postImageRepository.delete(postImage);
-            postImageRepository.flush();
-        } catch (DataAccessException exception) {
-            throw new PostException(PostExceptionCode.POST_IMAGE_DELETE_FAILED, exception);
-        }
+        transactionService.delete(imageId);
     }
 
     public PostImageDownloadDto download(Long imageId) {
