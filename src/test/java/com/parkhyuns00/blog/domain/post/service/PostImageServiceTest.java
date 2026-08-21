@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.parkhyuns00.blog.domain.post.exception.PostException;
+import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.Post;
 import com.parkhyuns00.blog.domain.post.model.PostImage;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
@@ -37,6 +38,9 @@ public class PostImageServiceTest {
     private PostImageRepository postImageRepository;
 
     @Mock
+    private PostImageTransactionService transactionService;
+
+    @Mock
     private GarageUtil garageUtil;
 
     @Mock
@@ -57,7 +61,20 @@ public class PostImageServiceTest {
 
         when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
         when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
-        when(postImageRepository.saveAndFlush(any(PostImage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(
+            transactionService.save(
+                eq(PostImageType.CONTENT),
+                startsWith("posts/content/"),
+                eq(MediaType.IMAGE_PNG_VALUE)
+            )
+        ).thenAnswer(invocation ->
+            new PostImageUploadDto(
+                1L,
+                PostImageType.CONTENT,
+                invocation.getArgument(1),
+                MediaType.IMAGE_PNG_VALUE
+            )
+        );
 
         PostImageUploadDto result = postImageService.upload(file, PostImageType.CONTENT);
 
@@ -67,6 +84,7 @@ public class PostImageServiceTest {
         assertThat(result.objectKey()).endsWith(".png");
 
         verify(garageUtil).uploadObject(eq(result.objectKey()), eq(MediaType.IMAGE_PNG_VALUE), any(byte[].class));
+        verify(transactionService).save(eq(PostImageType.CONTENT), eq(result.objectKey()), eq(MediaType.IMAGE_PNG_VALUE));
     }
 
     @Test
@@ -134,11 +152,17 @@ public class PostImageServiceTest {
             "image-png".getBytes()
         );
 
+        PostException saveException = new PostException(PostExceptionCode.POST_IMAGE_SAVE_FAILED);
+
         when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
         when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
-        when(postImageRepository.saveAndFlush(any(PostImage.class))).thenThrow(new DataIntegrityViolationException("fail"));
+        when(transactionService.save(
+            eq(PostImageType.CONTENT),
+            startsWith("posts/content/"),
+            eq(MediaType.IMAGE_PNG_VALUE)
+        )).thenThrow(saveException);
 
-        assertThatThrownBy(() -> postImageService.upload(file, PostImageType.CONTENT)).isInstanceOf(PostException.class);
+        assertThatThrownBy(() -> postImageService.upload(file, PostImageType.CONTENT)).isSameAs(saveException);
 
         verify(garageUtil).uploadObject(
             startsWith("posts/content/"),
@@ -232,5 +256,43 @@ public class PostImageServiceTest {
         verify(garageUtil).deleteObject("posts/content/test.png");
         verify(postImageRepository).delete(postImage);
         verify(postImageRepository).flush();
+    }
+
+    @Test
+    @DisplayName("DB 저장과 보상 삭제가 모두 실패하면 DB 저장 예외를 유지하고 삭제 예외를 suppressed 예외로 추가한다.")
+    void test_upload_preserve_original_exception_when_compensation_failed() {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "test.png",
+            MediaType.IMAGE_PNG_VALUE,
+            "image-png".getBytes()
+        );
+
+        PostException saveException = new PostException(PostExceptionCode.POST_IMAGE_SAVE_FAILED);
+        RuntimeException compensationException = new RuntimeException("Garage object 삭제 실패");
+
+        when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
+        when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
+        when(transactionService.save(
+            eq(PostImageType.CONTENT),
+            startsWith("posts/content/"),
+            eq(MediaType.IMAGE_PNG_VALUE)
+        )).thenThrow(saveException);
+
+        doThrow(compensationException).when(garageUtil).deleteObject(startsWith("posts/content/"));
+
+        assertThatThrownBy(() -> postImageService.upload(file, PostImageType.CONTENT))
+            .isSameAs(saveException)
+            .satisfies(
+                exception ->
+                    assertThat(exception.getSuppressed()).containsExactly(compensationException)
+            );
+
+        verify(garageUtil).uploadObject(
+            startsWith("posts/content/"),
+            eq(MediaType.IMAGE_PNG_VALUE),
+            any(byte[].class)
+        );
+        verify(garageUtil).deleteObject(startsWith("posts/content/"));
     }
 }

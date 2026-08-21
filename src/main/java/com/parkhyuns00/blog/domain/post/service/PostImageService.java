@@ -22,14 +22,13 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class PostImageService {
 
     private final PostImageRepository postImageRepository;
+    private final PostImageTransactionService transactionService;
     private final GarageUtil garageUtil;
     private final TikaUtil tikaUtil;
 
-    @Transactional
     public PostImageUploadDto upload(MultipartFile file, PostImageType type) {
         validateFile(file);
 
@@ -42,12 +41,10 @@ public class PostImageService {
         garageUtil.uploadObject(objectKey, mimeType, content);
 
         try {
-            PostImage postImage = postImageRepository.saveAndFlush(new PostImage(type, objectKey, mimeType));
-
-            return PostImageUploadDto.from(postImage);
-        } catch (DataAccessException exception) {
-            garageUtil.deleteObject(objectKey);
-            throw new PostException(PostExceptionCode.POST_IMAGE_SAVE_FAILED, exception);
+            return transactionService.save(type, objectKey, mimeType);
+        } catch (RuntimeException exception) {
+            compensateUpload(objectKey, exception);
+            throw exception;
         }
     }
 
@@ -77,6 +74,14 @@ public class PostImageService {
         ResponseInputStream<GetObjectResponse> inputStream = garageUtil.downloadObject(postImage.getObjectKey());
 
         return PostImageDownloadDto.from(postImage, inputStream);
+    }
+
+    private void compensateUpload(String objectKey, RuntimeException originalException) {
+        try {
+            garageUtil.deleteObject(objectKey);
+        } catch (RuntimeException compensationException) {
+            originalException.addSuppressed(compensationException);
+        }
     }
 
     private byte[] getBytes(MultipartFile file) {
