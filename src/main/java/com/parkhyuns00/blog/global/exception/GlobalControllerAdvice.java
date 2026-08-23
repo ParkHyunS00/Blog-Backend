@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -124,6 +125,15 @@ public class GlobalControllerAdvice {
         log.warn("[HandlerMethodValidationException] errors={}", detailErrors);
 
         return StandardResponse.fail(CommonExceptionCode.INVALID_REQUEST, detailErrors);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<StandardResponse<Void>> handleMaxUploadSizeExceededException(
+        MaxUploadSizeExceededException exception
+    ) {
+        log.warn("[MaxUploadSizeExceededException] maxUploadSize={}", exception.getMaxUploadSize());
+
+        return StandardResponse.fail(CommonExceptionCode.UPLOAD_SIZE_EXCEEDED);
     }
 
     @ExceptionHandler(Exception.class)
