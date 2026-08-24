@@ -958,4 +958,33 @@ public class PostControllerTest {
 
         verify(postService).publishDraft(eq(999L), any(PostCreateRequest.class));
     }
+
+    @Test
+    @DisplayName("발행된 게시글 삭제 요청이 성공하면 200을 반환한다.")
+    void test_delete_published_post_success() throws Exception {
+        doNothing().when(postService).deletePublishedPost(1L);
+
+        mockMvc.perform(delete("/api/admin/posts/{postId}", 1L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(postService).deletePublishedPost(1L);
+    }
+
+    @Test
+    @DisplayName("삭제할 발행 게시글을 찾을 수 없으면 404를 반환한다.")
+    void test_delete_published_post_fail_when_not_found() throws Exception {
+        doThrow(new PostException(PostExceptionCode.POST_NOT_FOUND))
+            .when(postService)
+            .deletePublishedPost(999L);
+
+        mockMvc.perform(delete("/api/admin/posts/{postId}", 999L))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
+
+        verify(postService).deletePublishedPost(999L);
+    }
 }

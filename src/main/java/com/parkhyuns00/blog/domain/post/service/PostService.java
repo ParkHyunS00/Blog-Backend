@@ -147,6 +147,11 @@ public class PostService {
         deletePost(postId, PostStatus.DRAFT);
     }
 
+    @Transactional
+    public void deletePublishedPost(Long postId) {
+        deletePost(postId, PostStatus.PUBLISHED);
+    }
+
     public PostDraftDetailDto getDraftPost(Long postId) {
         return postRepository.findDraftPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));

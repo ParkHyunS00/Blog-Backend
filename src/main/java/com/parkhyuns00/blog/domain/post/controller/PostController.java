@@ -26,6 +26,12 @@ public class PostController {
         return StandardResponse.created(postService.create(request));
     }
 
+    @DeleteMapping("/api/admin/posts/{postId}")
+    public ResponseEntity<StandardResponse<Void>> deletePublishedPost(@PathVariable Long postId) {
+        postService.deletePublishedPost(postId);
+        return StandardResponse.ok(null);
+    }
+
     @PostMapping("/api/admin/posts/draft")
     public ResponseEntity<StandardResponse<PostCreateDto>> createDraft(@Valid @RequestBody PostDraftCreateRequest request) {
         return StandardResponse.created(postService.createDraft(request));

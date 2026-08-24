@@ -641,6 +641,56 @@ public class AdminSecurityIntegrationTest {
         verify(postService).publishDraft(eq(1L), any(PostCreateRequest.class));
     }
 
+    @Test
+    @DisplayName("인증되지 않은 사용자는 발행 게시글을 삭제할 수 없다.")
+    void test_unauthenticated_user_cannot_delete_published_post() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deletePublishedPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("관리자도 CSRF 토큰 없이는 발행 게시글을 삭제할 수 없다.")
+    void test_admin_cannot_delete_published_post_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .session(session)
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deletePublishedPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 발행 게시글을 삭제할 수 있다.")
+    void test_admin_can_delete_published_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        doNothing().when(postService).deletePublishedPost(1L);
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(postService).deletePublishedPost(1L);
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 

@@ -1133,6 +1133,63 @@ public class PostServiceTest {
         verifyNoInteractions(postTagRepository);
     }
 
+    @Test
+    @DisplayName("발행된 게시글을 삭제하고 이미지 삭제 이벤트를 발행한다.")
+    void test_delete_published_post_success() {
+        Long postId = 1L;
+        Category category = new Category("Backend", "backend");
+        Post post = Post.publish("title", "summary", "content", category);
+
+        ReflectionTestUtils.setField(post, "id", postId);
+
+        PostImage thumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "posts/thumbnail/test.png",
+            "image/png"
+        );
+
+        PostImage contentImage = new PostImage(
+            PostImageType.CONTENT,
+            "posts/content/test.png",
+            "image/png"
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED))
+            .thenReturn(Optional.of(post));
+        when(postImageRepository.findAllByPostId(postId))
+            .thenReturn(List.of(thumbnail, contentImage));
+
+        postService.deletePublishedPost(postId);
+
+        verify(postRepository).delete(post);
+        verify(postRepository).flush();
+
+        ArgumentCaptor<PostImageCleanupEvent> eventCaptor = ArgumentCaptor.forClass(PostImageCleanupEvent.class);
+
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+        assertThat(eventCaptor.getValue().imageObjectKeys())
+            .containsExactly("posts/thumbnail/test.png", "posts/content/test.png");
+    }
+
+    @Test
+    @DisplayName("삭제할 발행된 게시글을 찾을 수 없으면 예외가 발생한다.")
+    void test_delete_published_post_fail_when_not_found() {
+        Long postId = 999L;
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.deletePublishedPost(postId))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository, never()).delete(any(Post.class));
+        verify(postRepository, never()).flush();
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(eventPublisher);
+    }
+
     private PostCreateRequest createRequest(
         String categoryName,
         List<String> tagNames,
