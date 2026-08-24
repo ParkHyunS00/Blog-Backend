@@ -1031,6 +1031,9 @@ public class PostServiceTest {
 
         postService.deleteDraft(postId);
 
+        verify(postTagRepository).deleteAllByPostId(postId);
+        verify(postImageRepository).deleteAll(List.of(thumbnail, contentImage));
+        verify(postImageRepository).flush();
         verify(postRepository).delete(draft);
         verify(postRepository).flush();
 
@@ -1161,6 +1164,9 @@ public class PostServiceTest {
 
         postService.deletePublishedPost(postId);
 
+        verify(postTagRepository).deleteAllByPostId(postId);
+        verify(postImageRepository).deleteAll(List.of(thumbnail, contentImage));
+        verify(postImageRepository).flush();
         verify(postRepository).delete(post);
         verify(postRepository).flush();
 

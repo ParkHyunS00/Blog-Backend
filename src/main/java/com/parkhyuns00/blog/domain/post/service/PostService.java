@@ -202,11 +202,15 @@ public class PostService {
         Post post = postRepository.findByIdAndStatus(postId, requiredStatus)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
 
-        List<String> imageObjectKeys = postImageRepository
-            .findAllByPostId(postId)
-            .stream()
+        List<PostImage> postImages = postImageRepository.findAllByPostId(postId);
+        List<String> imageObjectKeys = postImages.stream()
             .map(PostImage::getObjectKey)
             .toList();
+
+        postTagRepository.deleteAllByPostId(postId);
+
+        postImageRepository.deleteAll(postImages);
+        postImageRepository.flush();
 
         postRepository.delete(post);
         postRepository.flush();
