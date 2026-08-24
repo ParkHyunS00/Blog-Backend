@@ -32,6 +32,13 @@ public class PostController {
         return StandardResponse.ok(null);
     }
 
+    @PutMapping("/api/admin/posts/{postId}")
+    public ResponseEntity<StandardResponse<PostCreateDto>> updatePublishedPost(
+        @PathVariable Long postId, @Valid @RequestBody PostCreateRequest request
+    ) {
+        return StandardResponse.ok(postService.updatePublishedPost(postId, request));
+    }
+
     @PostMapping("/api/admin/posts/draft")
     public ResponseEntity<StandardResponse<PostCreateDto>> createDraft(@Valid @RequestBody PostDraftCreateRequest request) {
         return StandardResponse.created(postService.createDraft(request));

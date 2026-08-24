@@ -280,4 +280,63 @@ public class PostTest {
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
     }
+
+    @Test
+    @DisplayName("발행된 게시글의 작성 내용을 수정한다.")
+    void test_update_published_post_success() {
+        Category oldCategory = new Category("Spring", "spring");
+        Category newCategory = new Category("Java", "java");
+
+        Post post = Post.publish("old title", "old summary", "old content", oldCategory);
+
+        post.updatePublished(" new title ", " new summary ", "new content", newCategory);
+
+        assertThat(post.getTitle()).isEqualTo("new title");
+        assertThat(post.getSummary()).isEqualTo("new summary");
+        assertThat(post.getContent()).isEqualTo("new content");
+        assertThat(post.getCategory()).isSameAs(newCategory);
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("임시저장 게시글은 발행 게시글 수정 메서드로 수정할 수 없다.")
+    void test_update_published_post_fail_when_post_draft() {
+        Category category = new Category("Spring", "spring");
+        Post post = Post.createDraft("draft title", "draft summary", "draft content", category);
+
+        assertThatThrownBy(() -> post.updatePublished(
+            "new title",
+            "new summary",
+            "new content",
+            category
+        ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_STATUS);
+
+        assertThat(post.getTitle()).isEqualTo("draft title");
+        assertThat(post.getSummary()).isEqualTo("draft summary");
+        assertThat(post.getContent()).isEqualTo("draft content");
+        assertThat(post.getCategory()).isSameAs(category);
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("발행 게시글 수정 시 제목이 비어 있으면 예외가 발생한다.")
+    void test_update_published_post_fail_when_title_blank() {
+        Category category = new Category("Spring", "spring");
+        Post post = Post.publish("title", "summary", "content", category);
+
+        assertThatThrownBy(() -> post.updatePublished(
+            " ",
+            "new summary",
+            "new content",
+            category
+        ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
+
+        assertThat(post.getTitle()).isEqualTo("title");
+    }
 }

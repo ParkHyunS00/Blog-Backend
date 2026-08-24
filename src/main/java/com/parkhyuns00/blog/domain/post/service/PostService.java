@@ -108,11 +108,38 @@ public class PostService {
 
         draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
 
-        synchronizeDraftImages(draft, request.thumbnailImageId(), contentImageIds);
+        synchronizePostImages(draft, request.thumbnailImageId(), contentImageIds);
 
         replacePostTags(draft, tags);
 
         return PostCreateDto.from(draft);
+    }
+
+    @Transactional
+    public PostCreateDto updatePublishedPost(Long postId, PostCreateRequest request) {
+        Post post = postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        List<Long> contentImageIds = normalizeContentImageIds(request.contentImageIds());
+
+        validateCreateRequest(request, contentImageIds);
+
+        String sanitizedContent = htmlSanitizerUtil.sanitize(request.content());
+
+        validateSanitizedContent(sanitizedContent);
+        validateContentImageIds(sanitizedContent, contentImageIds);
+
+        Category category = categoryService.getOrCreateByName(request.categoryName());
+
+        List<Tag> tags = tagService.getOrCreateAllByNames(request.tagNames());
+
+        post.updatePublished(request.title(), request.summary(), sanitizedContent, category);
+
+        synchronizePostImages(post, request.thumbnailImageId(), contentImageIds);
+
+        replacePostTags(post, tags);
+
+        return PostCreateDto.from(post);
     }
 
     @Transactional
@@ -135,7 +162,7 @@ public class PostService {
         draft.updateDraft(request.title(), request.summary(), sanitizedContent, category);
         draft.publish();
 
-        synchronizeDraftImages(draft, request.thumbnailImageId(), contentImageIds);
+        synchronizePostImages(draft, request.thumbnailImageId(), contentImageIds);
 
         replacePostTags(draft, tags);
 
@@ -187,7 +214,7 @@ public class PostService {
         eventPublisher.publishEvent(new PostImageCleanupEvent(imageObjectKeys));
     }
 
-    private void synchronizeDraftImages(Post draft, Long thumbnailImageId, List<Long> contentImageIds) {
+    private void synchronizePostImages(Post draft, Long thumbnailImageId, List<Long> contentImageIds) {
         PostImage thumbnail = resolveThumbnailImage(thumbnailImageId, draft);
         List<PostImage> contentImages = resolveContentImages(contentImageIds, draft);
         List<PostImage> currentImages = postImageRepository.findAllByPostId(draft.getId());

@@ -1190,6 +1190,250 @@ public class PostServiceTest {
         verifyNoInteractions(eventPublisher);
     }
 
+    @Test
+    @DisplayName("발행 게시글의 작성 내용을 수정한다.")
+    void test_update_published_post_success() {
+        Long postId = 1L;
+        Category oldCategory = new Category("Spring", "spring");
+        Category newCategory = new Category("Backend", "backend");
+
+        Post post = Post.publish("기존 제목", "기존 요약", "<p>기존 본문</p>", oldCategory);
+
+        ReflectionTestUtils.setField(post, "id", postId);
+
+        PostCreateRequest request = new PostCreateRequest(
+            "수정 제목",
+            "수정 요약",
+            "<p>수정 본문</p>",
+            "Backend",
+            List.of(),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.of(post));
+        when(categoryService.getOrCreateByName("Backend")).thenReturn(newCategory);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of());
+
+        PostCreateDto result = postService.updatePublishedPost(postId, request);
+
+        assertThat(result.postId()).isEqualTo(postId);
+        assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
+
+        assertThat(post.getTitle()).isEqualTo("수정 제목");
+        assertThat(post.getSummary()).isEqualTo("수정 요약");
+        assertThat(post.getContent()).isEqualTo("<p>수정 본문</p>");
+        assertThat(post.getCategory()).isSameAs(newCategory);
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+
+        verify(postImageRepository).findAllByPostId(postId);
+        verify(postTagRepository).deleteAllByPostId(postId);
+        verify(postTagRepository).saveAll(List.of());
+        verify(postRepository, never()).save(any(Post.class));
+    }
+
+    @Test
+    @DisplayName("수정할 발행 게시글을 찾을 수 없으면 예외가 발생한다.")
+    void test_update_published_post_fail_when_not_found() {
+        Long postId = 999L;
+
+        PostCreateRequest request = new PostCreateRequest(
+            "수정 제목",
+            "수정 요약",
+            "<p>수정 본문</p>",
+            "Backend",
+            List.of("Java"),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.updatePublishedPost(postId, request))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository).findByIdAndStatus(postId, PostStatus.PUBLISHED);
+        verifyNoInteractions(categoryService);
+        verifyNoInteractions(tagService);
+        verifyNoInteractions(postImageRepository);
+        verifyNoInteractions(postTagRepository);
+    }
+
+    @Test
+    @DisplayName("발행 게시글 수정 시 요청된 이미지 관계로 동기화한다.")
+    void test_update_published_post_synchronize_images_success() {
+        Long postId = 1L;
+
+        Category category = new Category("Backend", "backend");
+        Post post = Post.publish("기존 제목", "기존 요약", "<p>기존 본문</p>", category);
+
+        ReflectionTestUtils.setField(post, "id", postId);
+
+        PostImage oldThumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "posts/thumbnail/old.png",
+            "image/png"
+        );
+        ReflectionTestUtils.setField(oldThumbnail, "id", 1L);
+        oldThumbnail.attachTo(post);
+
+        PostImage retainedContentImage = new PostImage(
+            PostImageType.CONTENT,
+            "posts/content/retained.png",
+            "image/png"
+        );
+        ReflectionTestUtils.setField(retainedContentImage, "id", 2L);
+        retainedContentImage.attachTo(post);
+
+        PostImage newThumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "posts/thumbnail/new.png",
+            "image/png"
+        );
+        ReflectionTestUtils.setField(newThumbnail, "id", 3L);
+
+        PostImage newContentImage = new PostImage(
+            PostImageType.CONTENT,
+            "posts/content/new.png",
+            "image/png"
+        );
+        ReflectionTestUtils.setField(newContentImage, "id", 4L);
+
+        PostCreateRequest request = new PostCreateRequest(
+            "수정 제목",
+            "수정 요약",
+            """
+            <p>수정 본문</p>
+            <img src="/api/post-images/2" alt="유지 이미지">
+            <img src="/api/post-images/4" alt="새 이미지">
+            """,
+            "Backend",
+            List.of(),
+            3L,
+            List.of(2L, 4L)
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.of(post));
+        when(categoryService.getOrCreateByName("Backend")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+
+        when(postImageRepository.findById(2L)).thenReturn(Optional.of(retainedContentImage));
+        when(postImageRepository.findById(3L)).thenReturn(Optional.of(newThumbnail));
+        when(postImageRepository.findById(4L)).thenReturn(Optional.of(newContentImage));
+
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of(oldThumbnail, retainedContentImage));
+
+        postService.updatePublishedPost(postId, request);
+
+        assertThat(oldThumbnail.getPost()).isNull();
+        assertThat(retainedContentImage.getPost()).isSameAs(post);
+        assertThat(newThumbnail.getPost()).isSameAs(post);
+        assertThat(newContentImage.getPost()).isSameAs(post);
+
+        verify(postImageRepository).findAllByPostId(postId);
+    }
+
+    @Test
+    @DisplayName("발행 게시글 수정 시 기존 태그를 요청 태그로 교체한다.")
+    void test_update_published_post_replace_tags_success() {
+        Long postId = 1L;
+        Category category = new Category("Backend", "backend");
+        Post post = Post.publish("기존 제목", "기존 요약", "<p>기존 본문</p>", category);
+        ReflectionTestUtils.setField(post, "id", postId);
+
+        Tag java = new Tag("Java", "java");
+        Tag spring = new Tag("Spring", "spring");
+
+        PostCreateRequest request = new PostCreateRequest(
+            "수정 제목",
+            "수정 요약",
+            "<p>수정 본문</p>",
+            "Backend",
+            List.of("Java", "Spring"),
+            null,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.of(post));
+        when(categoryService.getOrCreateByName("Backend")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of("Java", "Spring"))).thenReturn(List.of(java, spring));
+        when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of());
+
+        postService.updatePublishedPost(postId, request);
+
+        verify(postTagRepository).deleteAllByPostId(postId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PostTag>> captor = ArgumentCaptor.forClass(List.class);
+
+        verify(postTagRepository).saveAll(captor.capture());
+
+        List<PostTag> savedPostTags = captor.getValue();
+
+        assertThat(savedPostTags)
+            .hasSize(2)
+            .extracting(postTag -> postTag.getTag().getName())
+            .containsExactly("Java", "Spring");
+
+        assertThat(savedPostTags).allSatisfy(postTag -> assertThat(postTag.getPost()).isSameAs(post));
+    }
+
+    @Test
+    @DisplayName("다른 게시글에 연결된 이미지는 발행 게시글 수정에 사용할 수 없다.")
+    void test_update_published_post_fail_when_image_attached_to_other_post() {
+        Long postId = 1L;
+        Category category = new Category("Backend", "backend");
+        Post post = Post.publish("기존 제목", "기존 요약", "<p>기존 본문</p>", category);
+        ReflectionTestUtils.setField(post, "id", postId);
+
+        Post otherPost = Post.publish(
+            "다른 제목",
+            "다른 요약",
+            "<p>다른 본문</p>",
+            category
+        );
+        ReflectionTestUtils.setField(otherPost, "id", 2L);
+
+        PostImage otherThumbnail = new PostImage(
+            PostImageType.THUMBNAIL,
+            "posts/thumbnail/other.png",
+            "image/png"
+        );
+        ReflectionTestUtils.setField(otherThumbnail, "id", 3L);
+        otherThumbnail.attachTo(otherPost);
+
+        PostCreateRequest request = new PostCreateRequest(
+            "수정 제목",
+            "수정 요약",
+            "<p>수정 본문</p>",
+            "Backend",
+            List.of(),
+            3L,
+            List.of()
+        );
+
+        when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)).thenReturn(Optional.of(post));
+        when(categoryService.getOrCreateByName("Backend")).thenReturn(category);
+        when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
+        when(postImageRepository.findById(3L)).thenReturn(Optional.of(otherThumbnail));
+
+        assertThatThrownBy(() ->
+            postService.updatePublishedPost(postId, request)
+        )
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_IMAGE_ALREADY_ATTACHED);
+
+        assertThat(otherThumbnail.getPost()).isSameAs(otherPost);
+
+        verify(postImageRepository, never()).findAllByPostId(postId);
+        verify(postTagRepository, never()).deleteAllByPostId(postId);
+        verify(postTagRepository, never()).saveAll(anyList());
+    }
+
     private PostCreateRequest createRequest(
         String categoryName,
         List<String> tagNames,

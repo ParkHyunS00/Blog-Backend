@@ -691,6 +691,64 @@ public class AdminSecurityIntegrationTest {
         verify(postService).deletePublishedPost(1L);
     }
 
+    @Test
+    @DisplayName("인증되지 않은 사용자는 발행 게시글을 수정할 수 없다.")
+    void test_unauthenticated_user_cannot_update_published_post() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 발행 게시글을 수정할 수 없다.")
+    void test_admin_cannot_update_published_post_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 발행 게시글을 수정할 수 있다.")
+    void test_admin_can_update_published_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.updatePublishedPost(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(postService).updatePublishedPost(eq(1L), any(PostCreateRequest.class));
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 
