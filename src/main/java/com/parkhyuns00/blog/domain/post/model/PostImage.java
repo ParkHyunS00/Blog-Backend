@@ -38,6 +38,14 @@ public class PostImage extends BaseEntity {
         this.mimeType = mimeType;
     }
 
+    public void detach() {
+        this.post = null;
+    }
+
+    public boolean isAttachedTo(Post post) {
+        return this.post == post;
+    }
+
     public boolean isAttached() {
         return this.post != null;
     }

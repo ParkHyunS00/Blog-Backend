@@ -56,18 +56,18 @@ public class PostTest {
     void test_create_fail_when_title_null() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft(null, "summary", "content", category))
+        assertThatThrownBy(() -> Post.publish(null, "summary", "content", category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
     }
 
     @Test
-    @DisplayName("게시글 제목이 공백이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 제목이 공백이면 예외가 발생한다.")
     void test_create_fail_when_title_blank() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft("   ", "summary", "content", category))
+        assertThatThrownBy(() -> Post.publish("   ", "summary", "content", category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
@@ -86,22 +86,22 @@ public class PostTest {
     }
 
     @Test
-    @DisplayName("게시글 요약이 null 이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 요약이 null 이면 예외가 발생한다.")
     void test_create_fail_when_summary_null() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft("title", null, "content", category))
+        assertThatThrownBy(() -> Post.publish("title", null, "content", category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_SUMMARY);
     }
 
     @Test
-    @DisplayName("게시글 요약이 공이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 요약이 공백이면 예외가 발생한다.")
     void test_create_fail_when_summary_blank() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft("title", "   ", "content", category))
+        assertThatThrownBy(() -> Post.publish("title", "   ", "content", category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_SUMMARY);
@@ -120,31 +120,31 @@ public class PostTest {
     }
 
     @Test
-    @DisplayName("게시글 본문이 null이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 본문이 null이면 예외가 발생한다.")
     void test_create_fail_when_content_null() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft("title", "summary", null, category))
+        assertThatThrownBy(() -> Post.publish("title", "summary", null, category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_CONTENT);
     }
 
     @Test
-    @DisplayName("게시글 본문이 공백 이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 본문이 공백 이면 예외가 발생한다.")
     void test_create_fail_when_content_blank() {
         Category category = new Category("Spring", "spring");
 
-        assertThatThrownBy(() -> Post.createDraft("title", "summary", "   ", category))
+        assertThatThrownBy(() -> Post.publish("title", "summary", "   ", category))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_CONTENT);
     }
 
     @Test
-    @DisplayName("게시글 카테고리가 null 이면 예외가 발생한다.")
+    @DisplayName("발행 게시글 카테고리가 null 이면 예외가 발생한다.")
     void test_create_fail_when_category_null() {
-        assertThatThrownBy(() -> Post.createDraft("title", "summary", "content", null))
+        assertThatThrownBy(() -> Post.publish("title", "summary", "content", null))
             .isInstanceOf(PostException.class)
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_CATEGORY);
@@ -170,5 +170,114 @@ public class PostTest {
         post.publish();
 
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("초안은 제목, 요약, 본문 없이 생성할 수 있다.")
+    void test_create_draft_success_when_content_empty() {
+        Category category = new Category("Spring", "spring");
+        Post post = Post.createDraft(null, null, null, category);
+
+        assertThat(post.getTitle()).isEmpty();
+        assertThat(post.getSummary()).isEmpty();
+        assertThat(post.getContent()).isEmpty();
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("초안은 카테고리 없이 생성할 수 있다.")
+    void test_create_draft_success_when_category_null() {
+        Post post = Post.createDraft("title", "summary", "content", null);
+
+        assertThat(post.getCategory()).isNull();
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("필수 내용이 없는 초안은 발행할 수 없다.")
+    void test_publish_draft_fail_when_required_fields_missing() {
+        Post post = Post.createDraft(
+            null,
+            null,
+            null,
+            null
+        );
+
+        assertThatThrownBy(post::publish)
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
+
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("초안 게시글의 작성 내용을 수정한다.")
+    void test_update_draft_success() {
+        Category oldCategory = new Category("Spring", "spring");
+        Category newCategory = new Category("Java", "java");
+
+        Post post = Post.createDraft("old title", "old summary", "old content", oldCategory);
+
+        post.updateDraft("new title", "new summary", "new content", newCategory);
+
+        assertThat(post.getTitle()).isEqualTo("new title");
+        assertThat(post.getSummary()).isEqualTo("new summary");
+        assertThat(post.getContent()).isEqualTo("new content");
+        assertThat(post.getCategory()).isSameAs(newCategory);
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("초안 게시글은 작성 내용을 빈 값으로 수정할 수 있다.")
+    void test_update_draft_success_when_content_empty() {
+        Category category = new Category("Spring", "spring");
+
+        Post post = Post.createDraft("title", "summary", "content", category);
+
+        post.updateDraft(null, null, null, null);
+
+        assertThat(post.getTitle()).isEmpty();
+        assertThat(post.getSummary()).isEmpty();
+        assertThat(post.getContent()).isEmpty();
+        assertThat(post.getCategory()).isNull();
+        assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("발행된 게시글은 초안 수정 메서드로 수정할 수 없다.")
+    void test_update_draft_fail_when_post_published() {
+        Category category = new Category("Spring", "spring");
+
+        Post post = Post.publish("title", "summary", "content", category);
+
+        assertThatThrownBy(() -> post.updateDraft(
+            "new title",
+            "new summary",
+            "new content",
+            category
+            ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_STATUS);
+
+        assertThat(post.getTitle()).isEqualTo("title");
+        assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("초안 수정 시 제목이 200자를 초과하면 예외가 발생한다.")
+    void test_update_draft_fail_when_title_too_long() {
+        Post post = Post.createDraft(null, null, null, null);
+
+        assertThatThrownBy(() -> post.updateDraft(
+            "a".repeat(201),
+            null,
+            null,
+            null
+            ))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
     }
 }

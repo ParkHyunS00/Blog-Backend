@@ -10,9 +10,7 @@ import com.parkhyuns00.blog.domain.post.model.Post;
 import com.parkhyuns00.blog.domain.post.model.PostImage;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
 import com.parkhyuns00.blog.domain.post.model.PostTag;
-import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSearchCondition;
-import com.parkhyuns00.blog.domain.post.service.dto.PostSummaryDto;
+import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.repository.TagRepository;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
@@ -369,5 +367,170 @@ public class PostQueryRepositoryTest {
 
         assertThat(result.postId()).isEqualTo(post.getId());
         assertThat(result.thumbnailImageId()).isNull();
+    }
+
+    @Test
+    @DisplayName("임시저장 목록을 조회하면 초안의 카테고리와 태그를 반환한다.")
+    void test_find_draft_posts_success() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+        Tag java = tagRepository.save(new Tag("Java", "java"));
+        Tag spring = tagRepository.save(new Tag("Spring", "spring"));
+
+        Post draft = postRepository.save(
+            Post.createDraft(
+                "draft title",
+                "draft summary",
+                "draft content",
+                category
+            )
+        );
+
+        postTagRepository.saveAll(List.of(new PostTag(draft, spring), new PostTag(draft, java)));
+
+        Post published = postRepository.save(
+            Post.publish(
+                "published title",
+                "published summary",
+                "published content",
+                category
+            )
+        );
+
+        Page<PostDraftSummaryDto> result = postRepository.findDraftPosts(PageRequest.of(0, 10));
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent()).hasSize(1);
+
+        PostDraftSummaryDto summary = result.getContent().getFirst();
+
+        assertThat(summary.postId()).isEqualTo(draft.getId());
+        assertThat(summary.postId()).isNotEqualTo(published.getId());
+        assertThat(summary.title()).isEqualTo("draft title");
+        assertThat(summary.category()).isNotNull();
+        assertThat(summary.category().categoryId()).isEqualTo(category.getId());
+        assertThat(summary.category().name()).isEqualTo("Backend");
+        assertThat(summary.category().slug()).isEqualTo("backend");
+        assertThat(summary.tags()).extracting(TagDto::slug).containsExactly("java", "spring");
+        assertThat(summary.updatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("카테고리가 없는 임시저장은 카테고리를 null로 반환한다.")
+    void test_find_draft_posts_without_category_success() {
+        Post draft = postRepository.save(Post.createDraft(null, null, null, null));
+        Page<PostDraftSummaryDto> result = postRepository.findDraftPosts(PageRequest.of(0, 10));
+
+        PostDraftSummaryDto summary = result.getContent().getFirst();
+
+        assertThat(summary.postId()).isEqualTo(draft.getId());
+        assertThat(summary.title()).isEmpty();
+        assertThat(summary.category()).isNull();
+        assertThat(summary.tags()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("임시저장 목록을 한 페이지에 10개씩 조회한다.")
+    void test_find_draft_posts_with_pagination_success() {
+        for (int index = 1; index <= 11; index++) {
+            postRepository.save(
+                Post.createDraft(
+                    "draft " + index,
+                    null,
+                    null,
+                    null
+                )
+            );
+        }
+
+        Page<PostDraftSummaryDto> result = postRepository.findDraftPosts(PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(10);
+        assertThat(result.getNumber()).isZero();
+        assertThat(result.getSize()).isEqualTo(10);
+        assertThat(result.getTotalElements()).isEqualTo(11);
+        assertThat(result.getTotalPages()).isEqualTo(2);
+        assertThat(result.hasNext()).isTrue();
+        assertThat(result.hasPrevious()).isFalse();
+    }
+
+    @Test
+    @DisplayName("임시저장 상세 조회 시 에디터 복원에 필요한 정보를 반환한다.")
+    void test_find_draft_post_by_id_success() {
+        Category category = categoryRepository.save(new Category("Spring", "spring"));
+        Tag java = tagRepository.save(new Tag("Java", "java"));
+        Tag spring = tagRepository.save(new Tag("Spring", "spring"));
+
+        Post draft = postRepository.save(
+            Post.createDraft("draft title", "draft summary", "<p>draft content</p>", category)
+        );
+
+        postTagRepository.saveAll(List.of(new PostTag(draft, spring), new PostTag(draft, java)));
+
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
+
+        thumbnail.attachTo(draft);
+        postImageRepository.save(thumbnail);
+
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png");
+
+        contentImage.attachTo(draft);
+        postImageRepository.save(contentImage);
+
+        Optional<PostDraftDetailDto> result = postRepository.findDraftPostById(draft.getId());
+
+        assertThat(result).isPresent();
+
+        PostDraftDetailDto detail = result.orElseThrow();
+
+        assertThat(detail.postId()).isEqualTo(draft.getId());
+        assertThat(detail.title()).isEqualTo("draft title");
+        assertThat(detail.summary()).isEqualTo("draft summary");
+        assertThat(detail.content()).isEqualTo("<p>draft content</p>");
+        assertThat(detail.category()).isNotNull();
+        assertThat(detail.category().categoryId()).isEqualTo(category.getId());
+        assertThat(detail.category().name()).isEqualTo("Spring");
+        assertThat(detail.category().slug()).isEqualTo("spring");
+        assertThat(detail.tags())
+            .extracting(TagDto::slug)
+            .containsExactly("java", "spring");
+
+        assertThat(detail.thumbnailImageId()).isEqualTo(thumbnail.getId());
+        assertThat(detail.contentImageIds()).containsExactly(contentImage.getId());
+        assertThat(detail.createdAt()).isNotNull();
+        assertThat(detail.updatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("작성 내용과 연관 정보가 없는 임시저장도 상세 조회할 수 있다.")
+    void test_find_empty_draft_post_by_id_success() {
+        Post draft = postRepository.save(Post.createDraft(null, null, null, null));
+
+        Optional<PostDraftDetailDto> result = postRepository.findDraftPostById(draft.getId());
+
+        assertThat(result).isPresent();
+
+        PostDraftDetailDto detail = result.orElseThrow();
+
+        assertThat(detail.title()).isEmpty();
+        assertThat(detail.summary()).isEmpty();
+        assertThat(detail.content()).isEmpty();
+        assertThat(detail.category()).isNull();
+        assertThat(detail.tags()).isEmpty();
+        assertThat(detail.thumbnailImageId()).isNull();
+        assertThat(detail.contentImageIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("발행된 게시글은 임시저장 상세 조회에서 반환하지 않는다.")
+    void test_find_draft_post_by_id_empty_when_published() {
+        Category category = categoryRepository.save(new Category("Spring", "spring"));
+
+        Post published = postRepository.save(
+            Post.publish("title", "summary", "content", category)
+        );
+
+        Optional<PostDraftDetailDto> result = postRepository.findDraftPostById(published.getId());
+
+        assertThat(result).isEmpty();
     }
 }
