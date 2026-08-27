@@ -56,13 +56,17 @@ public class PostImageTransactionServiceTest {
             transactionService.save(
                 PostImageType.CONTENT,
                 "posts/content/test.png",
-                "image/png"
+                "image/png",
+                1200,
+                630
             );
 
         assertThat(result.imageId()).isEqualTo(1L);
         assertThat(result.type()).isEqualTo(PostImageType.CONTENT);
         assertThat(result.objectKey()).isEqualTo("posts/content/test.png");
         assertThat(result.mimeType()).isEqualTo("image/png");
+        assertThat(result.width()).isEqualTo(1200);
+        assertThat(result.height()).isEqualTo(630);
     }
 
     @Test
@@ -74,7 +78,9 @@ public class PostImageTransactionServiceTest {
         assertThatThrownBy(() -> transactionService.save(
             PostImageType.CONTENT,
             "posts/content/test.png",
-            "image/png"
+            "image/png",
+            1200,
+            630
             )
         )
             .isInstanceOf(PostException.class)
@@ -85,11 +91,7 @@ public class PostImageTransactionServiceTest {
     @Test
     @DisplayName("게시글에 연결되지 않은 이미지 메타데이터를 삭제하고 이미지 정리 이벤트를 발행한다.")
     void test_delete_post_image_success() {
-        PostImage postImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/test.png",
-            "image/png"
-        );
+        PostImage postImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(postImageRepository.findById(1L)).thenReturn(Optional.of(postImage));
 
@@ -118,11 +120,7 @@ public class PostImageTransactionServiceTest {
     @Test
     @DisplayName("게시글에 연결된 이미지를 삭제하면 예외가 발생한다.")
     void test_delete_post_image_fail_when_attached() {
-        PostImage postImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/test.png",
-            "image/png"
-        );
+        PostImage postImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         ReflectionTestUtils.setField(postImage, "post", mock(Post.class));
 
@@ -141,11 +139,7 @@ public class PostImageTransactionServiceTest {
     @Test
     @DisplayName("이미지 메타데이터 삭제에 실패하면 삭제 실패 예외가 발생하고 정리 이벤트를 발행하지 않는다.")
     void test_delete_post_image_fail_when_db_delete_failed() {
-        PostImage postImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/test.png",
-            "image/png"
-        );
+        PostImage postImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(postImageRepository.findById(1L)).thenReturn(Optional.of(postImage));
 

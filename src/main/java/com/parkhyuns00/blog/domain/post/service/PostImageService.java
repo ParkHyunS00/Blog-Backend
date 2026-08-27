@@ -8,7 +8,9 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageDownloadDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageUploadDto;
 import com.parkhyuns00.blog.util.GarageUtil;
+import com.parkhyuns00.blog.util.ImageMetadataUtil;
 import com.parkhyuns00.blog.util.TikaUtil;
+import com.parkhyuns00.blog.util.dto.ImageMetadata;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +28,7 @@ public class PostImageService {
     private final PostImageTransactionService transactionService;
     private final GarageUtil garageUtil;
     private final TikaUtil tikaUtil;
+    private final ImageMetadataUtil imageMetadataUtil;
 
     public PostImageUploadDto upload(MultipartFile file, PostImageType type) {
         validateFile(file);
@@ -36,10 +39,12 @@ public class PostImageService {
         validateImageMimeType(mimeType);
 
         String objectKey = generateObjectKey(type, mimeType);
+        ImageMetadata metadata = imageMetadataUtil.extract(content);
+
         garageUtil.uploadObject(objectKey, mimeType, content);
 
         try {
-            return transactionService.save(type, objectKey, mimeType);
+            return transactionService.save(type, objectKey, mimeType, metadata.width(), metadata.height());
         } catch (RuntimeException exception) {
             compensateUpload(objectKey, exception);
             throw exception;

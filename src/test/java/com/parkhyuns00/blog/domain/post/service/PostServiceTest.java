@@ -89,8 +89,8 @@ public class PostServiceTest {
 
         Category category = new Category("Spring", "spring");
         Tag tag = new Tag("Java", "java");
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
-        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
         when(tagService.getOrCreateAllByNames(List.of("Java"))).thenReturn(List.of(tag));
@@ -123,7 +123,7 @@ public class PostServiceTest {
         PostCreateRequest request = createRequest("Spring", List.of(), 1L, null);
 
         Category category = new Category("Spring", "spring");
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
         when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
@@ -283,7 +283,7 @@ public class PostServiceTest {
         PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of());
 
         Category category = new Category("Spring", "spring");
-        PostImage thumbnail = new PostImage(PostImageType.CONTENT, "posts/thumbnail/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.CONTENT, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
         when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
@@ -315,8 +315,8 @@ public class PostServiceTest {
         );
 
         Category category = new Category("Spring", "spring");
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
-        PostImage contentImage = new PostImage(PostImageType.THUMBNAIL, "posts/content/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
+        PostImage contentImage = new PostImage(PostImageType.THUMBNAIL, "posts/content/test.png", "image/png", 1200, 630);
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
         when(tagService.getOrCreateAllByNames(List.of())).thenReturn(List.of());
@@ -341,7 +341,7 @@ public class PostServiceTest {
         PostCreateRequest request = createRequest("Spring", List.of(), 1L, List.of());
 
         Category category = new Category("Spring", "spring");
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/a.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/a.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(thumbnail, "post", mock(Post.class));
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
@@ -621,9 +621,9 @@ public class PostServiceTest {
         Category category = new Category("Spring", "spring");
         Tag tag = new Tag("Java", "java");
 
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
-        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png");
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(categoryService.getOrCreateByName("Spring")).thenReturn(category);
         when(tagService.getOrCreateAllByNames(List.of("Java"))).thenReturn(List.of(tag));
@@ -837,9 +837,9 @@ public class PostServiceTest {
 
         ReflectionTestUtils.setField(draft, "id", postId);
 
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/old.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/old.png", "image/png", 1200, 630);
 
-        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/old.png", "image/png");
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/old.png", "image/png", 1200, 630);
 
         thumbnail.attachTo(draft);
         contentImage.attachTo(draft);
@@ -873,15 +873,15 @@ public class PostServiceTest {
         Post draft = Post.createDraft(null, null, null, null);
         ReflectionTestUtils.setField(draft, "id", postId);
 
-        PostImage retainedContentImage = new PostImage(PostImageType.CONTENT, "posts/content/retained.png", "image/png");
+        PostImage retainedContentImage = new PostImage(PostImageType.CONTENT, "posts/content/retained.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(retainedContentImage, "id", 2L);
 
         retainedContentImage.attachTo(draft);
 
-        PostImage newThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/new.png", "image/png");
+        PostImage newThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/new.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(newThumbnail, "id", 3L);
 
-        PostImage newContentImage = new PostImage(PostImageType.CONTENT, "posts/content/new.png", "image/png");
+        PostImage newContentImage = new PostImage(PostImageType.CONTENT, "posts/content/new.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(newContentImage, "id", 4L);
 
         PostDraftUpdateRequest request = new PostDraftUpdateRequest(
@@ -921,7 +921,7 @@ public class PostServiceTest {
         Post otherPost = Post.createDraft("other", "summary", "content", null);
         ReflectionTestUtils.setField(otherPost, "id", 2L);
 
-        PostImage otherThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/other.png", "image/png");
+        PostImage otherThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/other.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(otherThumbnail, "id", 3L);
 
         otherThumbnail.attachTo(otherPost);
@@ -1014,17 +1014,9 @@ public class PostServiceTest {
 
         ReflectionTestUtils.setField(draft, "id", postId);
 
-        PostImage thumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "posts/thumbnail/test.png",
-            "image/png"
-        );
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
-        PostImage contentImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/test.png",
-            "image/png"
-        );
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(postRepository.findByIdAndStatus(postId, PostStatus.DRAFT)).thenReturn(Optional.of(draft));
         when(postImageRepository.findAllByPostId(postId)).thenReturn(List.of(thumbnail, contentImage));
@@ -1145,17 +1137,9 @@ public class PostServiceTest {
 
         ReflectionTestUtils.setField(post, "id", postId);
 
-        PostImage thumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "posts/thumbnail/test.png",
-            "image/png"
-        );
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
-        PostImage contentImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/test.png",
-            "image/png"
-        );
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         when(postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED))
             .thenReturn(Optional.of(post));
@@ -1278,34 +1262,18 @@ public class PostServiceTest {
 
         ReflectionTestUtils.setField(post, "id", postId);
 
-        PostImage oldThumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "posts/thumbnail/old.png",
-            "image/png"
-        );
+        PostImage oldThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/old.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(oldThumbnail, "id", 1L);
         oldThumbnail.attachTo(post);
 
-        PostImage retainedContentImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/retained.png",
-            "image/png"
-        );
+        PostImage retainedContentImage = new PostImage(PostImageType.CONTENT, "posts/content/retained.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(retainedContentImage, "id", 2L);
         retainedContentImage.attachTo(post);
 
-        PostImage newThumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "posts/thumbnail/new.png",
-            "image/png"
-        );
+        PostImage newThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/new.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(newThumbnail, "id", 3L);
 
-        PostImage newContentImage = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/new.png",
-            "image/png"
-        );
+        PostImage newContentImage = new PostImage(PostImageType.CONTENT, "posts/content/new.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(newContentImage, "id", 4L);
 
         PostCreateRequest request = new PostCreateRequest(
@@ -1403,11 +1371,7 @@ public class PostServiceTest {
         );
         ReflectionTestUtils.setField(otherPost, "id", 2L);
 
-        PostImage otherThumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "posts/thumbnail/other.png",
-            "image/png"
-        );
+        PostImage otherThumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/other.png", "image/png", 1200, 630);
         ReflectionTestUtils.setField(otherThumbnail, "id", 3L);
         otherThumbnail.attachTo(otherPost);
 

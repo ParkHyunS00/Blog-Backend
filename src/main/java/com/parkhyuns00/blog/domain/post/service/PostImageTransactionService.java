@@ -23,9 +23,9 @@ public class PostImageTransactionService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public PostImageUploadDto save(PostImageType type, String objectKey, String mimeType) {
+    public PostImageUploadDto save(PostImageType type, String objectKey, String mimeType, int width, int height) {
         try {
-            PostImage image = postImageRepository.saveAndFlush(new PostImage(type, objectKey, mimeType));
+            PostImage image = postImageRepository.saveAndFlush(new PostImage(type, objectKey, mimeType, width, height));
 
             return PostImageUploadDto.from(image);
         } catch (DataAccessException exception) {
