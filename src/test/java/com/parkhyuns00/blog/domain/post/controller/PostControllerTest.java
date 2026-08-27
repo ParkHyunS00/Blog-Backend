@@ -958,4 +958,115 @@ public class PostControllerTest {
 
         verify(postService).publishDraft(eq(999L), any(PostCreateRequest.class));
     }
+
+    @Test
+    @DisplayName("발행된 게시글 삭제 요청이 성공하면 200을 반환한다.")
+    void test_delete_published_post_success() throws Exception {
+        doNothing().when(postService).deletePublishedPost(1L);
+
+        mockMvc.perform(delete("/api/admin/posts/{postId}", 1L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(postService).deletePublishedPost(1L);
+    }
+
+    @Test
+    @DisplayName("삭제할 발행 게시글을 찾을 수 없으면 404를 반환한다.")
+    void test_delete_published_post_fail_when_not_found() throws Exception {
+        doThrow(new PostException(PostExceptionCode.POST_NOT_FOUND))
+            .when(postService)
+            .deletePublishedPost(999L);
+
+        mockMvc.perform(delete("/api/admin/posts/{postId}", 999L))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
+
+        verify(postService).deletePublishedPost(999L);
+    }
+
+    @Test
+    @DisplayName("발행 게시글 수정 요청이 성공하면 수정 결과를 반환한다.")
+    void test_update_published_post_success() throws Exception {
+        when(postService.updatePublishedPost(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                    "title": "수정 제목",
+                    "summary": "수정 요약",
+                    "content": "<p>수정 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": ["Java", "Spring"],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                  }
+                  """)
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(postService).updatePublishedPost(eq(1L), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("수정할 발행 게시글을 찾을 수 없으면 404를 반환한다.")
+    void test_update_published_post_fail_when_not_found() throws Exception {
+        when(postService.updatePublishedPost(eq(999L), any(PostCreateRequest.class)))
+            .thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 999L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                    "title": "수정 제목",
+                    "summary": "수정 요약",
+                    "content": "<p>수정 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": [],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                  }
+                  """)
+            )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error.code").value("P_001"))
+            .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."));
+
+        verify(postService).updatePublishedPost(eq(999L), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("발행 게시글 수정 요청의 제목이 비어 있으면 400을 반환한다.")
+    void test_update_published_post_fail_when_title_blank() throws Exception {
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                    "title": " ",
+                    "summary": "수정 요약",
+                    "content": "<p>수정 본문</p>",
+                    "categoryName": "Backend",
+                    "tagNames": [],
+                    "thumbnailImageId": null,
+                    "contentImageIds": []
+                  }
+                  """)
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+
+        verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
+    }
 }
