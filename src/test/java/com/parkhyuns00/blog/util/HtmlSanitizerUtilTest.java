@@ -249,4 +249,68 @@ public class HtmlSanitizerUtilTest {
 
         assertThat(result).isNull();
     }
+
+    @Test
+    @DisplayName("img 태그의 유효한 width와 height 속성을 허용한다.")
+    void test_sanitize_allow_valid_image_dimensions() {
+        String html = """
+          <img
+              src="/api/post-images/1"
+              alt="본문 이미지"
+              width="1200"
+              height="630"
+          >
+          """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .contains("src=\"/api/post-images/1\"")
+            .contains("alt=\"본문 이미지\"")
+            .contains("width=\"1200\"")
+            .contains("height=\"630\"");
+    }
+
+    @Test
+    @DisplayName("img 태그의 올바르지 않은 width와 height 속성을 제거한다.")
+    void test_sanitize_remove_invalid_image_dimensions() {
+        String html = """
+          <p>
+              <img
+                  src="/api/post-images/1"
+                  width="0"
+                  height="630px"
+                  alt="본문 이미지"
+              >
+          </p>
+          """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .contains("src=\"/api/post-images/1\"")
+            .contains("alt=\"본문 이미지\"")
+            .doesNotContain("width=")
+            .doesNotContain("height=");
+    }
+
+    @Test
+    @DisplayName("img 크기 속성에 포함된 임의 문자열을 제거한다.")
+    void test_sanitize_remove_malicious_image_dimensions() {
+        String html = """
+          <img
+              src="/api/post-images/1"
+              width="1200 onclick=alert(1)"
+              height="-630"
+              alt="본문 이미지"
+          >
+          """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .doesNotContain("width=")
+            .doesNotContain("height=")
+            .doesNotContain("onclick");
+    }
 }
