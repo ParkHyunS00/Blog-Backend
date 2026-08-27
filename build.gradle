@@ -57,6 +57,9 @@ dependencies {
 	// OWASP Java HTML Sanitizer
 	implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1'
 
+	// Webp metadata
+	implementation 'com.twelvemonkeys.imageio:imageio-webp:3.14.0'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'
