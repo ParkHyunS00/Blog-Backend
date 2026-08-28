@@ -14,7 +14,9 @@ import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageDownloadDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageUploadDto;
 import com.parkhyuns00.blog.util.GarageUtil;
+import com.parkhyuns00.blog.util.ImageMetadataUtil;
 import com.parkhyuns00.blog.util.TikaUtil;
+import com.parkhyuns00.blog.util.dto.ImageMetadata;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +45,9 @@ public class PostImageServiceTest {
     @Mock
     private TikaUtil tikaUtil;
 
+    @Mock
+    private ImageMetadataUtil imageMetadataUtil;
+
     @InjectMocks
     private PostImageService postImageService;
 
@@ -58,18 +63,23 @@ public class PostImageServiceTest {
 
         when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
         when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
+        when(imageMetadataUtil.extract(any(byte[].class))).thenReturn(new ImageMetadata(1200, 630));
         when(
             transactionService.save(
                 eq(PostImageType.CONTENT),
                 startsWith("posts/content/"),
-                eq(MediaType.IMAGE_PNG_VALUE)
+                eq(MediaType.IMAGE_PNG_VALUE),
+                eq(1200),
+                eq(630)
             )
         ).thenAnswer(invocation ->
             new PostImageUploadDto(
                 1L,
                 PostImageType.CONTENT,
                 invocation.getArgument(1),
-                MediaType.IMAGE_PNG_VALUE
+                MediaType.IMAGE_PNG_VALUE,
+                1200,
+                630
             )
         );
 
@@ -79,9 +89,17 @@ public class PostImageServiceTest {
         assertThat(result.mimeType()).isEqualTo(MediaType.IMAGE_PNG_VALUE);
         assertThat(result.objectKey()).startsWith("posts/content/");
         assertThat(result.objectKey()).endsWith(".png");
+        assertThat(result.width()).isEqualTo(1200);
+        assertThat(result.height()).isEqualTo(630);
 
         verify(garageUtil).uploadObject(eq(result.objectKey()), eq(MediaType.IMAGE_PNG_VALUE), any(byte[].class));
-        verify(transactionService).save(eq(PostImageType.CONTENT), eq(result.objectKey()), eq(MediaType.IMAGE_PNG_VALUE));
+        verify(transactionService).save(
+            eq(PostImageType.CONTENT),
+            eq(result.objectKey()),
+            eq(MediaType.IMAGE_PNG_VALUE),
+            eq(1200),
+            eq(630)
+        );
     }
 
     @Test
@@ -153,10 +171,13 @@ public class PostImageServiceTest {
 
         when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
         when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
+        when(imageMetadataUtil.extract(any(byte[].class))).thenReturn(new ImageMetadata(1200, 630));
         when(transactionService.save(
             eq(PostImageType.CONTENT),
             startsWith("posts/content/"),
-            eq(MediaType.IMAGE_PNG_VALUE)
+            eq(MediaType.IMAGE_PNG_VALUE),
+            eq(1200),
+            eq(630)
         )).thenThrow(saveException);
 
         assertThatThrownBy(() -> postImageService.upload(file, PostImageType.CONTENT)).isSameAs(saveException);
@@ -172,7 +193,7 @@ public class PostImageServiceTest {
     @Test
     @DisplayName("이미지를 다운로드하면 Garage에서 object stream을 조회한다.")
     void test_download_success() {
-        PostImage postImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", MediaType.IMAGE_PNG_VALUE);
+        PostImage postImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", MediaType.IMAGE_PNG_VALUE, 1200, 630);
 
         ResponseInputStream<GetObjectResponse> inputStream = mock(ResponseInputStream.class);
         GetObjectResponse response = GetObjectResponse.builder().contentLength(10L).build();
@@ -215,10 +236,13 @@ public class PostImageServiceTest {
 
         when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn(MediaType.IMAGE_PNG_VALUE);
         when(tikaUtil.isImage(MediaType.IMAGE_PNG_VALUE)).thenReturn(true);
+        when(imageMetadataUtil.extract(any(byte[].class))).thenReturn(new ImageMetadata(1200, 630));
         when(transactionService.save(
             eq(PostImageType.CONTENT),
             startsWith("posts/content/"),
-            eq(MediaType.IMAGE_PNG_VALUE)
+            eq(MediaType.IMAGE_PNG_VALUE),
+            eq(1200),
+            eq(630)
         )).thenThrow(saveException);
 
         doThrow(compensationException).when(garageUtil).deleteObject(startsWith("posts/content/"));
@@ -245,5 +269,33 @@ public class PostImageServiceTest {
 
         verify(transactionService).delete(1L);
         verifyNoInteractions(garageUtil);
+    }
+
+    @Test
+    @DisplayName("이미지 메타데이터를 읽을 수 없으면 Garage와 DB에 저장하지 않는다.")
+    void test_upload_fail_when_image_metadata_read_failed() {
+        byte[] content = "invalid-image-content".getBytes();
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "broken.webp",
+            "image/webp",
+            content
+        );
+
+        PostException metadataException = new PostException(PostExceptionCode.POST_IMAGE_METADATA_READ_FAILED);
+
+        when(tikaUtil.detectMimeType(any(byte[].class))).thenReturn("image/webp");
+        when(tikaUtil.isImage("image/webp")).thenReturn(true);
+        when(imageMetadataUtil.extract(any(byte[].class))).thenThrow(metadataException);
+
+        assertThatThrownBy(() -> postImageService.upload(file, PostImageType.CONTENT)).isSameAs(metadataException);
+
+        verify(tikaUtil).detectMimeType(content);
+        verify(tikaUtil).isImage("image/webp");
+        verify(imageMetadataUtil).extract(content);
+
+        verifyNoInteractions(garageUtil);
+        verifyNoInteractions(transactionService);
     }
 }

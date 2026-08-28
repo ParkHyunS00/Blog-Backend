@@ -54,11 +54,7 @@ public class PostServiceIntegrationTest {
         Tag tag = tagRepository.save(new Tag("Java", "java"));
 
         Post post = postRepository.save(Post.publish("게시글 제목", "게시글 요약", "<p>게시글 본문</p>", category));
-        PostImage image = new PostImage(
-            PostImageType.CONTENT,
-            "posts/content/delete-test.png",
-            "image/png"
-        );
+        PostImage image = new PostImage(PostImageType.CONTENT, "posts/content/delete-test.png", "image/png", 1200, 630);
         image.attachTo(post);
 
         postImageRepository.save(image);

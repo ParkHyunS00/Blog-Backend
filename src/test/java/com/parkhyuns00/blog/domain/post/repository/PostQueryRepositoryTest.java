@@ -81,7 +81,7 @@ public class PostQueryRepositoryTest {
         Post post = postRepository.save(
             Post.publish("title", "summary", "content", category)
         );
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "thumbnail/object-key", "image/webp");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "thumbnail/object-key", "image/webp", 1200, 630);
 
         thumbnail.attachTo(post);
         postImageRepository.save(thumbnail);
@@ -280,14 +280,10 @@ public class PostQueryRepositoryTest {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
         Tag java = tagRepository.save(new Tag("Java", "java"));
         Post post = postRepository.save(Post.publish("title", "summary", "content", category));
-        PostImage thumbnail = new PostImage(
-            PostImageType.THUMBNAIL,
-            "thumbnail/object-key",
-            "image/webp"
-        );
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "thumbnail/object-key", "image/webp", 1200, 630);
         thumbnail.attachTo(post);
 
-        PostImage contentImage = new PostImage(PostImageType.CONTENT, "content/object-key", "image/webp");
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "content/object-key", "image/webp", 1200, 630);
         contentImage.attachTo(post);
 
         postImageRepository.saveAll(List.of(thumbnail, contentImage));
@@ -466,12 +462,12 @@ public class PostQueryRepositoryTest {
 
         postTagRepository.saveAll(List.of(new PostTag(draft, spring), new PostTag(draft, java)));
 
-        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png");
+        PostImage thumbnail = new PostImage(PostImageType.THUMBNAIL, "posts/thumbnail/test.png", "image/png", 1200, 630);
 
         thumbnail.attachTo(draft);
         postImageRepository.save(thumbnail);
 
-        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png");
+        PostImage contentImage = new PostImage(PostImageType.CONTENT, "posts/content/test.png", "image/png", 1200, 630);
 
         contentImage.attachTo(draft);
         postImageRepository.save(contentImage);

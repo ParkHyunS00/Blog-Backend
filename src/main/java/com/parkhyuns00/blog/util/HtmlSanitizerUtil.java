@@ -14,6 +14,7 @@ public class HtmlSanitizerUtil {
     private static final Pattern POST_IMAGE_PATH_PATTERN = Pattern.compile("^/api/post-images/[1-9][0-9]*$");
     private static final Pattern CODE_CLASS_PATTERN = Pattern.compile("^language-[A-Za-z0-9][A-Za-z0-9_+.-]{0,63}$");
     private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+    private static final Pattern IMAGE_DIMENSION_PATTERN = Pattern.compile("^[1-9][0-9]{0,4}$");
     private static final AttributePolicy POST_IMAGE_SOURCE_POLICY = (_, _, value) ->
         POST_IMAGE_PATH_PATTERN.matcher(value).matches() ? value : null;
     private static final AttributePolicy CODE_CLASS_POLICY = (_, _, value) ->
@@ -24,6 +25,8 @@ public class HtmlSanitizerUtil {
             .matcher(normalizedValue)
             .matches() ? normalizedValue : null;
     };
+    private static final AttributePolicy IMAGE_DIMENSION_POLICY = (_, _, value) ->
+            IMAGE_DIMENSION_PATTERN.matcher(value).matches() ? value : null;
 
     private static final PolicyFactory POLICY = new HtmlPolicyBuilder()
         .allowElements(
@@ -41,7 +44,12 @@ public class HtmlSanitizerUtil {
         .allowAttributes("src")
         .matching(POST_IMAGE_SOURCE_POLICY)
         .onElements("img")
+
         .allowAttributes("alt")
+        .onElements("img")
+
+        .allowAttributes("width", "height")
+        .matching(IMAGE_DIMENSION_POLICY)
         .onElements("img")
 
         .allowAttributes("class")

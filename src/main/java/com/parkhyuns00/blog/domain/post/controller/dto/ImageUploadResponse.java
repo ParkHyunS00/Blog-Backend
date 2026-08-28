@@ -7,9 +7,18 @@ public record ImageUploadResponse(
     Long imageId,
     PostImageType type,
     String objectKey,
-    String mimeType
+    String mimeType,
+    int width,
+    int height
 ) {
     public static ImageUploadResponse from(PostImageUploadDto dto) {
-        return new ImageUploadResponse(dto.imageId(), dto.type(), dto.objectKey(), dto.mimeType());
+        return new ImageUploadResponse(
+            dto.imageId(),
+            dto.type(),
+            dto.objectKey(),
+            dto.mimeType(),
+            dto.width(),
+            dto.height()
+        );
     }
 }
