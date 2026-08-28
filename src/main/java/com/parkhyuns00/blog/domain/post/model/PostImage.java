@@ -28,14 +28,32 @@ public class PostImage extends BaseEntity {
     @Column(name = "mime_type", nullable = false, length = 100)
     private String mimeType;
 
+    @Column(nullable = false)
+    private int width;
+
+    @Column(nullable = false)
+    private int height;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id")
     private Post post;
 
-    public PostImage(PostImageType type, String objectKey, String mimeType) {
+    public PostImage(PostImageType type, String objectKey, String mimeType, int width, int height) {
+        validateDimensions(width, height);
+
         this.type = type;
         this.objectKey = objectKey;
         this.mimeType = mimeType;
+        this.width = width;
+        this.height = height;
+    }
+
+    public void detach() {
+        this.post = null;
+    }
+
+    public boolean isAttachedTo(Post post) {
+        return this.post == post;
     }
 
     public boolean isAttached() {
@@ -52,5 +70,11 @@ public class PostImage extends BaseEntity {
         }
 
         this.post = post;
+    }
+
+    private void validateDimensions(int width, int height) {
+        if (width <= 0 || height <= 0) {
+            throw new PostException(PostExceptionCode.INVALID_POST_IMAGE_DIMENSIONS);
+        }
     }
 }

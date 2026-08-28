@@ -27,7 +27,9 @@ public enum PostExceptionCode implements ExceptionCode {
     POST_IMAGE_ALREADY_ATTACHED(HttpStatus.CONFLICT, "P_106", "이미 연결된 이미지입니다."),
     INVALID_POST_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "P_107", "게시글 이미지 타입이 올바르지 않습니다."),
     POST_IMAGE_SAVE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "P_108", "게시글 이미지 저장에 실패했습니다."),
-    POST_IMAGE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "P_109", "게시글 이미지 삭제에 실패했습니다.");
+    POST_IMAGE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "P_109", "게시글 이미지 삭제에 실패했습니다."),
+    INVALID_POST_IMAGE_DIMENSIONS(HttpStatus.BAD_REQUEST, "P_110", "이미지 크기 정보가 올바르지 않습니다."),
+    POST_IMAGE_METADATA_READ_FAILED(HttpStatus.BAD_REQUEST, "P_111", "이미지 메타데이터를 읽을 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

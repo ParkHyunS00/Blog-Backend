@@ -35,16 +35,11 @@ public class Post extends BaseEntity {
     @Column(nullable = false, length = 20)
     private PostStatus status;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
     private Category category;
 
     private Post(String title, String summary, String content, PostStatus status, Category category) {
-        validateTitle(title);
-        validateSummary(summary);
-        validateContent(content);
-        validateCategory(category);
-
         this.title = title.trim();
         this.summary = summary.trim();
         this.content = content;
@@ -53,22 +48,79 @@ public class Post extends BaseEntity {
     }
 
     public static Post createDraft(String title, String summary, String content, Category category) {
-        return new Post(title, summary, content, PostStatus.DRAFT, category);
+        validateDraftLength(title, summary);
+
+        return new Post(
+            normalizeDraftValue(title),
+            normalizeDraftValue(summary),
+            normalizeDraftValue(content),
+            PostStatus.DRAFT,
+            category
+        );
     }
 
     public static Post publish(String title, String summary, String content, Category category) {
-        return new Post(title, summary, content, PostStatus.PUBLISHED, category);
+        validateForPublish(title, summary, content, category);
+
+        return new Post(title.trim(), summary.trim(), content, PostStatus.PUBLISHED, category);
+    }
+
+    private static void validateForPublish(String title, String summary, String content, Category category) {
+        validateTitle(title);
+        validateSummary(summary);
+        validateContent(content);
+        validateCategory(category);
+    }
+
+    private static String normalizeDraftValue(String value) {
+        return value == null ? "" : value.trim();
     }
 
     public void publish() {
-        if (this.status == PostStatus.PUBLISHED) {
-            return;
-        }
+        if (this.status == PostStatus.PUBLISHED) return;
+
+        validateForPublish(title, summary, content, category);
 
         this.status = PostStatus.PUBLISHED;
     }
 
-    private void validateTitle(String title) {
+    public void updateDraft(String title, String summary, String content, Category category) {
+        if (status != PostStatus.DRAFT) throw new PostException(PostExceptionCode.INVALID_POST_STATUS);
+
+        validateDraftLength(title, summary);
+
+        this.title = normalizeDraftValue(title);
+        this.summary = normalizeDraftValue(summary);
+        this.content = normalizeDraftValue(content);
+        this.category = category;
+    }
+
+    public void updatePublished(String title, String summary, String content, Category category) {
+        if (status != PostStatus.PUBLISHED) throw new PostException(PostExceptionCode.INVALID_POST_STATUS);
+
+        validateForPublish(title, summary, content, category);
+
+        this.title = title.trim();
+        this.summary = summary.trim();
+        this.content = content;
+        this.category = category;
+    }
+
+    private static void validateDraftLength(String title, String summary) {
+        if (title != null && title.trim().length() > MAX_TITLE_LENGTH) {
+            throw new PostException(
+                PostExceptionCode.INVALID_POST_TITLE
+            );
+        }
+
+        if (summary != null && summary.trim().length() > MAX_SUMMARY_LENGTH) {
+            throw new PostException(
+                PostExceptionCode.INVALID_POST_SUMMARY
+            );
+        }
+    }
+
+    private static void validateTitle(String title) {
         if (title == null || title.isBlank()) {
             throw new PostException(PostExceptionCode.INVALID_POST_TITLE);
         }
@@ -78,7 +130,7 @@ public class Post extends BaseEntity {
         }
     }
 
-    private void validateSummary(String summary) {
+    private static void validateSummary(String summary) {
         if (summary == null || summary.isBlank()) {
             throw new PostException(PostExceptionCode.INVALID_POST_SUMMARY);
         }
@@ -88,13 +140,13 @@ public class Post extends BaseEntity {
         }
     }
 
-    private void validateContent(String content) {
+    private static void validateContent(String content) {
         if (content == null || content.isBlank()) {
             throw new PostException(PostExceptionCode.INVALID_POST_CONTENT);
         }
     }
 
-    private void validateCategory(Category category) {
+    private static void validateCategory(Category category) {
         if (category == null) {
             throw new PostException(PostExceptionCode.INVALID_POST_CATEGORY);
         }

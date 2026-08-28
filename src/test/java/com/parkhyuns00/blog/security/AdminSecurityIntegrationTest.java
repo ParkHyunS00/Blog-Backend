@@ -2,18 +2,21 @@ package com.parkhyuns00.blog.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.parkhyuns00.blog.config.security.dto.AdminProperties;
 import com.parkhyuns00.blog.domain.auth.repository.AdminAuthAttemptRepository;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
+import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostImageService;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
+import com.parkhyuns00.blog.domain.post.service.dto.PostDraftDetailDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import jakarta.servlet.http.Cookie;
@@ -23,12 +26,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -292,6 +300,455 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
     }
 
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_posts() throws Exception {
+        when(postService.getPublishedPosts(any(), any()))
+            .thenReturn(Page.empty(PageRequest.of(0, 5)));
+
+        mockMvc.perform(get("/api/posts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content").isEmpty());
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 공개 게시글 상세 정보를 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_published_post() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        when(postService.getPublishedPost(1L))
+            .thenReturn(new PostDetailDto(
+                1L,
+                "title",
+                "summary",
+                "content",
+                10L,
+                "Backend",
+                "backend",
+                List.of(),
+                List.of(),
+                now,
+                now
+            ));
+
+        mockMvc.perform(get("/api/posts/1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.postId").value(1));
+    }
+
+    @Test
+    @DisplayName("모든 사용자는 태그 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_tags() throws Exception {
+        mockMvc.perform(get("/api/tags"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 API에 접근할 수 없다.")
+    void test_unauthenticated_user_cannot_create_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(post("/api/admin/posts/draft")
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}")
+        )
+        .andExpect(status().isForbidden());
+
+        verify(postService, never()).createDraft(any(PostDraftCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글을 임시저장할 수 있다.")
+    void test_admin_can_create_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.createDraft(any(PostDraftCreateRequest.class))
+        ).thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(post("/api/admin/posts/draft")
+            .session(session)
+            .cookie(csrfCookie)
+            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}")
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.status").value(201))
+        .andExpect(jsonPath("$.data.postId").value(1))
+        .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(postService).createDraft(any(PostDraftCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 수정 API에 접근할 수 없다.")
+    void test_unauthenticated_user_cannot_update_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header(
+                    "X-XSRF-TOKEN",
+                    csrfCookie.getValue()
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updateDraft(anyLong(), any(PostDraftUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 수정할 수 있다.")
+    void test_admin_can_update_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.updateDraft(eq(1L), any(PostDraftUpdateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
+
+        mockMvc.perform(
+            put("/api/admin/posts/draft/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header(
+                    "X-XSRF-TOKEN",
+                    csrfCookie.getValue()
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {
+                      "title": "updated title",
+                      "summary": "updated summary",
+                      "content": "<p>updated content</p>",
+                      "categoryName": null,
+                      "tagNames": [],
+                      "thumbnailImageId": null,
+                      "contentImageIds": []
+                  }
+                  """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(postService).updateDraft(eq(1L), any(PostDraftUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 목록을 조회할 수 없다.")
+    void test_unauthenticated_user_cannot_get_draft_posts() throws Exception {
+        mockMvc.perform(get("/api/admin/posts/draft")).andExpect(status().isForbidden());
+
+        verify(postService, never()).getDraftPosts(anyInt());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장 목록을 조회할 수 있다.")
+    void test_admin_can_get_draft_posts() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        when(postService.getDraftPosts(0))
+            .thenReturn(Page.empty(PageRequest.of(0, 10)));
+
+        mockMvc.perform(
+            get("/api/admin/posts/draft")
+                .session(session)
+                .param("page", "0")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.content").isEmpty())
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(10))
+            .andExpect(jsonPath("$.data.totalElements").value(0))
+            .andExpect(jsonPath("$.data.totalPages").value(0));
+
+        verify(postService).getDraftPosts(0);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장 상세 정보를 조회할 수 없다.")
+    void test_unauthenticated_user_cannot_get_draft_post() throws Exception {
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ))
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).getDraftPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장 상세 정보를 조회할 수 있다.")
+    void test_admin_can_get_draft_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        LocalDateTime now = LocalDateTime.now();
+
+        PostDraftDetailDto detail = new PostDraftDetailDto(
+            1L,
+            "draft title",
+            "draft summary",
+            "<p>draft content</p>",
+            null,
+            List.of(),
+            null,
+            List.of(),
+            now,
+            now
+        );
+
+        when(postService.getDraftPost(1L)).thenReturn(detail);
+
+        mockMvc.perform(
+            get(
+                "/api/admin/posts/draft/{postId}",
+                1L
+            ).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.title").value("draft title"))
+            .andExpect(jsonPath("$.data.content").value("<p>draft content</p>"));
+
+        verify(postService).getDraftPost(1L);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 삭제할 수 없다.")
+    void test_unauthenticated_user_cannot_delete_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deleteDraft(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 게시글 임시저장을 삭제할 수 없다.")
+    void test_admin_cannot_delete_draft_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .session(session)
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deleteDraft(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 삭제할 수 있다.")
+    void test_admin_can_delete_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        doNothing().when(postService).deleteDraft(1L);
+
+        mockMvc.perform(
+            delete(
+                "/api/admin/posts/draft/{postId}",
+                1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
+
+        verify(postService).deleteDraft(1L);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 발행할 수 없다.")
+    void test_unauthenticated_user_cannot_publish_draft() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).publishDraft(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 게시글 임시저장을 발행할 수 없다.")
+    void test_admin_cannot_publish_draft_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L
+            )
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).publishDraft(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 게시글 임시저장을 발행할 수 있다.")
+    void test_admin_can_publish_draft() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.publishDraft(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            post(
+                "/api/admin/posts/draft/{postId}/publish",
+                1L
+            )
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(postService).publishDraft(eq(1L), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 발행 게시글을 삭제할 수 없다.")
+    void test_unauthenticated_user_cannot_delete_published_post() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deletePublishedPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("관리자도 CSRF 토큰 없이는 발행 게시글을 삭제할 수 없다.")
+    void test_admin_cannot_delete_published_post_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .session(session)
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).deletePublishedPost(anyLong());
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 발행 게시글을 삭제할 수 있다.")
+    void test_admin_can_delete_published_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        doNothing().when(postService).deletePublishedPost(1L);
+
+        mockMvc.perform(
+            delete("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(postService).deletePublishedPost(1L);
+    }
+
+    @Test
+    @DisplayName("인증되지 않은 사용자는 발행 게시글을 수정할 수 없다.")
+    void test_unauthenticated_user_cannot_update_published_post() throws Exception {
+        Cookie csrfCookie = issueCsrfToken();
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자도 CSRF 토큰 없이는 발행 게시글을 수정할 수 없다.")
+    void test_admin_cannot_update_published_post_without_csrf() throws Exception {
+        MockHttpSession session = adminLogin();
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isForbidden());
+
+        verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 사용자는 발행 게시글을 수정할 수 있다.")
+    void test_admin_can_update_published_post() throws Exception {
+        MockHttpSession session = adminLogin();
+        Cookie csrfCookie = issueCsrfToken();
+
+        when(postService.updatePublishedPost(eq(1L), any(PostCreateRequest.class)))
+            .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
+
+        mockMvc.perform(
+            put("/api/admin/posts/{postId}", 1L)
+                .session(session)
+                .cookie(csrfCookie)
+                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPostRequestBody())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.postId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(postService).updatePublishedPost(eq(1L), any(PostCreateRequest.class));
+    }
+
     private MockHttpSession adminKeyLogin() throws Exception {
         Cookie csrfCookie = issueCsrfToken();
 
@@ -346,7 +803,6 @@ public class AdminSecurityIntegrationTest {
             "title": "title",
             "summary": "summary",
             "content": "content",
-            "status": "PUBLISHED",
             "categoryName": "Spring",
             "tagNames": ["Java"],
             "thumbnailImageId": 1,
