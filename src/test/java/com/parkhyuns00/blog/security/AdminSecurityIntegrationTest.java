@@ -34,6 +34,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -55,6 +57,9 @@ public class AdminSecurityIntegrationTest {
 
     @Autowired
     private AdminAuthAttemptRepository adminAuthAttemptRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockitoBean
     private AdminProperties adminProperties;
@@ -79,11 +84,54 @@ public class AdminSecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("CSRF 토큰 발급 엔드포인트는 인증 없이 접근 가능하고 XSRF-TOKEN 쿠키를 내려준다.")
+    @DisplayName("CSRF 토큰 발급 엔드포인트는 쿠키와 응답 본문으로 CSRF 토큰을 내려준다.")
     void test_csrf_endpoint_issue_csrf_cookie() throws Exception {
         mockMvc.perform(get("/api/admin/csrf"))
             .andExpect(status().isOk())
-            .andExpect(cookie().exists("XSRF-TOKEN"));
+            .andExpect(cookie().exists("XSRF-TOKEN"))
+            .andExpect(cookie().httpOnly("XSRF-TOKEN", true))
+            .andExpect(jsonPath("$.data.token").isNotEmpty())
+            .andExpect(jsonPath("$.data.headerName").value("X-XSRF-TOKEN"));
+    }
+
+    @Test
+    @DisplayName("응답 본문으로 발급받은 CSRF 토큰으로 관리자 키 로그인을 요청할 수 있다.")
+    void test_admin_key_login_success_with_csrf_token_from_response() throws Exception {
+        CsrfTokenFixture csrf = issueCsrfToken();
+
+        mockMvc.perform(post("/api/admin/auth/key")
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"adminKey":"test-admin-key"}
+                  """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.message").value("OTP_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("CSRF 쿠키에는 원본 토큰이, 응답 본문에는 XOR 토큰이 반환된다.")
+    void test_csrf_cookie_token_and_response_token_are_different() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/admin/csrf"))
+            .andExpect(status().isOk())
+            .andExpect(cookie().exists("XSRF-TOKEN"))
+            .andExpect(jsonPath("$.data.token").isNotEmpty())
+            .andReturn();
+
+        Cookie csrfCookie = result.getResponse().getCookie("XSRF-TOKEN");
+
+        String cookieToken = csrfCookie.getValue();
+
+        String responseToken = objectMapper
+            .readTree(result.getResponse().getContentAsString())
+            .at("/data/token")
+            .asString();
+
+        System.out.println("cookieToken   = " + cookieToken);
+        System.out.println("responseToken = " + responseToken);
+
+        assertThat(responseToken).isNotEqualTo(cookieToken);
     }
 
     @Test
@@ -100,11 +148,11 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("올바른 관리자 키로 로그인하면 OTP_REQUIRED 응답과 PRE_ADMIN 세션이 생성된다.")
     void test_admin_key_login_success() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/auth/key")
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"adminKey":"test-admin-key"}
@@ -116,11 +164,11 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("잘못된 관리자 키로 로그인하면 인증 실패 응답을 반환한다.")
     void test_admin_key_login_failure() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/auth/key")
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"adminKey":"asdfasdfasdfasdf"}
@@ -132,11 +180,11 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("관리자 키 인증 없이 OTP 인증을 요청하면 거절된다.")
     void test_otp_login_without_pre_admin_session_is_forbidden() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/auth/otp")
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType("application/json")
             .content("""
                 {"otpCode":"123123"}
@@ -148,14 +196,14 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("PRE_ADMIN 세션에서 올바른 OTP 코드를 입력하면 ADMIN 인증 상태가 된다.")
     void test_otp_login_success_after_admin_key_login() throws Exception {
         MockHttpSession session = adminKeyLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(googleAuthenticator.authorize(OTP_SECRET, Integer.parseInt(OTP_CODE))).thenReturn(true);
 
         mockMvc.perform(post("/api/admin/auth/otp")
             .session(session)
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"otpCode":"123123"}
@@ -178,26 +226,26 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 세션에서 로그아웃하면 관리자 인증 상태가 해제된다.")
     void test_admin_logout_success() throws Exception {
         MockHttpSession session = adminKeyLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(googleAuthenticator.authorize(OTP_SECRET, Integer.parseInt(OTP_CODE))).thenReturn(true);
 
         mockMvc.perform(post("/api/admin/auth/otp")
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                   {"otpCode":"123123"}
                   """))
             .andExpect(status().isOk());
 
-        Cookie logoutCsrfCookie = issueCsrfToken();
+        CsrfTokenFixture logoutCsrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/auth/logout")
                 .session(session)
-                .cookie(logoutCsrfCookie)
-                .header("X-XSRF-TOKEN", logoutCsrfCookie.getValue()))
+                .cookie(logoutCsrf.cookie())
+                .header("X-XSRF-TOKEN", logoutCsrf.token()))
             .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/admin/test")
@@ -209,12 +257,12 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("PRE_ADMIN 세션에서는 로그아웃 요청이 거절된다.")
     void test_pre_admin_logout_is_forbidden() throws Exception {
         MockHttpSession session = adminKeyLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/auth/logout")
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token()))
             .andExpect(status().isForbidden());
     }
 
@@ -254,11 +302,11 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 게시글 생성 API에 접근할 수 없다.")
     void test_unauthenticated_user_cannot_create_post() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/posts")
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody()))
             .andExpect(status().isForbidden());
@@ -268,12 +316,12 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("PRE_ADMIN 사용자는 게시글 생성 API에 접근할 수 없다.")
     void test_pre_admin_cannot_create_post() throws Exception {
         MockHttpSession session = adminKeyLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/posts")
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody()))
             .andExpect(status().isForbidden());
@@ -283,15 +331,15 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 게시글 생성 API에 접근할 수 있다.")
     void test_admin_can_create_post() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(postService.create(any(PostCreateRequest.class)))
             .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
 
         mockMvc.perform(post("/api/admin/posts")
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody()))
             .andExpect(status().isCreated())
@@ -347,11 +395,11 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 게시글 임시저장 API에 접근할 수 없다.")
     void test_unauthenticated_user_cannot_create_draft() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(post("/api/admin/posts/draft")
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("{}")
         )
@@ -364,15 +412,15 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 게시글을 임시저장할 수 있다.")
     void test_admin_can_create_draft() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(postService.createDraft(any(PostDraftCreateRequest.class))
         ).thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
 
         mockMvc.perform(post("/api/admin/posts/draft")
             .session(session)
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("{}")
         )
@@ -387,14 +435,14 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 게시글 임시저장 수정 API에 접근할 수 없다.")
     void test_unauthenticated_user_cannot_update_draft() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(
             put("/api/admin/posts/draft/{postId}", 1L)
-                .cookie(csrfCookie)
+                .cookie(csrf.cookie())
                 .header(
                     "X-XSRF-TOKEN",
-                    csrfCookie.getValue()
+                    csrf.token()
                 )
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
@@ -407,7 +455,7 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 게시글 임시저장을 수정할 수 있다.")
     void test_admin_can_update_draft() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(postService.updateDraft(eq(1L), any(PostDraftUpdateRequest.class)))
             .thenReturn(new PostCreateDto(1L, PostStatus.DRAFT));
@@ -415,10 +463,10 @@ public class AdminSecurityIntegrationTest {
         mockMvc.perform(
             put("/api/admin/posts/draft/{postId}", 1L)
                 .session(session)
-                .cookie(csrfCookie)
+                .cookie(csrf.cookie())
                 .header(
                     "X-XSRF-TOKEN",
-                    csrfCookie.getValue()
+                    csrf.token()
                 )
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -523,14 +571,14 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 삭제할 수 없다.")
     void test_unauthenticated_user_cannot_delete_draft() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(
             delete(
                 "/api/admin/posts/draft/{postId}",
                 1L)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
             )
             .andExpect(status().isForbidden());
 
@@ -557,7 +605,7 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 게시글 임시저장을 삭제할 수 있다.")
     void test_admin_can_delete_draft() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         doNothing().when(postService).deleteDraft(1L);
 
@@ -566,8 +614,8 @@ public class AdminSecurityIntegrationTest {
                 "/api/admin/posts/draft/{postId}",
                 1L)
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
             )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200));
@@ -578,14 +626,14 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 게시글 임시저장을 발행할 수 없다.")
     void test_unauthenticated_user_cannot_publish_draft() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(
             post(
                 "/api/admin/posts/draft/{postId}/publish",
                 1L)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody())
             )
@@ -617,7 +665,7 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 게시글 임시저장을 발행할 수 있다.")
     void test_admin_can_publish_draft() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(postService.publishDraft(eq(1L), any(PostCreateRequest.class)))
             .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
@@ -628,8 +676,8 @@ public class AdminSecurityIntegrationTest {
                 1L
             )
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody())
             )
@@ -644,12 +692,12 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 발행 게시글을 삭제할 수 없다.")
     void test_unauthenticated_user_cannot_delete_published_post() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(
             delete("/api/admin/posts/{postId}", 1L)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
             )
             .andExpect(status().isForbidden());
 
@@ -674,15 +722,15 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 발행 게시글을 삭제할 수 있다.")
     void test_admin_can_delete_published_post() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         doNothing().when(postService).deletePublishedPost(1L);
 
         mockMvc.perform(
             delete("/api/admin/posts/{postId}", 1L)
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
             )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
@@ -694,12 +742,12 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("인증되지 않은 사용자는 발행 게시글을 수정할 수 없다.")
     void test_unauthenticated_user_cannot_update_published_post() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         mockMvc.perform(
             put("/api/admin/posts/{postId}", 1L)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody())
             )
@@ -728,7 +776,7 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("ADMIN 사용자는 발행 게시글을 수정할 수 있다.")
     void test_admin_can_update_published_post() throws Exception {
         MockHttpSession session = adminLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(postService.updatePublishedPost(eq(1L), any(PostCreateRequest.class)))
             .thenReturn(new PostCreateDto(1L, PostStatus.PUBLISHED));
@@ -736,8 +784,8 @@ public class AdminSecurityIntegrationTest {
         mockMvc.perform(
             put("/api/admin/posts/{postId}", 1L)
                 .session(session)
-                .cookie(csrfCookie)
-                .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createPostRequestBody())
             )
@@ -750,11 +798,11 @@ public class AdminSecurityIntegrationTest {
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         MockHttpSession session = (MockHttpSession) mockMvc.perform(post("/api/admin/auth/key")
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"adminKey":"test-admin-key"}
@@ -770,14 +818,14 @@ public class AdminSecurityIntegrationTest {
 
     private MockHttpSession adminLogin() throws Exception {
         MockHttpSession session = adminKeyLogin();
-        Cookie csrfCookie = issueCsrfToken();
+        CsrfTokenFixture csrf = issueCsrfToken();
 
         when(googleAuthenticator.authorize(OTP_SECRET, Integer.parseInt(OTP_CODE))).thenReturn(true);
 
         mockMvc.perform(post("/api/admin/auth/otp")
             .session(session)
-            .cookie(csrfCookie)
-            .header("X-XSRF-TOKEN", csrfCookie.getValue())
+            .cookie(csrf.cookie())
+            .header("X-XSRF-TOKEN", csrf.token())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"otpCode":"123123"}
@@ -787,14 +835,24 @@ public class AdminSecurityIntegrationTest {
         return session;
     }
 
-    private Cookie issueCsrfToken() throws Exception {
-        return mockMvc.perform(get("/api/admin/csrf")
+    private CsrfTokenFixture issueCsrfToken() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/admin/csrf")
             .session(new MockHttpSession()))
             .andExpect(status().isOk())
             .andExpect(cookie().exists("XSRF-TOKEN"))
-            .andReturn()
-            .getResponse()
-            .getCookie("XSRF-TOKEN");
+            .andExpect(jsonPath("$.data.token").isNotEmpty())
+            .andReturn();
+
+        Cookie cookie = result.getResponse().getCookie("XSRF-TOKEN");
+        String token = objectMapper
+            .readTree(result.getResponse().getContentAsString())
+            .at("/data/token")
+            .asString();
+
+        return new CsrfTokenFixture(cookie, token);
+    }
+
+    private record CsrfTokenFixture(Cookie cookie, String token) {
     }
 
     private String createPostRequestBody() {
