@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.domain.auth.controller;
 
 import com.parkhyuns00.blog.domain.auth.controller.dto.AdminAuthStatusResponse;
 import com.parkhyuns00.blog.domain.auth.controller.dto.AdminAuthStep;
+import com.parkhyuns00.blog.domain.auth.controller.dto.CsrfTokenResponse;
 import com.parkhyuns00.blog.global.response.StandardResponse;
 import com.parkhyuns00.blog.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,9 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAuthController {
 
     @GetMapping("/csrf")
-    public ResponseEntity<StandardResponse<Void>> csrf(CsrfToken csrfToken) {
-        csrfToken.getToken();
-        return StandardResponse.ok(null);
+    public ResponseEntity<StandardResponse<CsrfTokenResponse>> csrf(CsrfToken csrfToken) {
+        return StandardResponse.ok(CsrfTokenResponse.from(csrfToken));
     }
 
     @GetMapping("/auth/status")

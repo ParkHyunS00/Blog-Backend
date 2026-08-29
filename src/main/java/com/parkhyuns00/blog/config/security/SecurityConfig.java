@@ -16,7 +16,6 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
@@ -24,6 +23,8 @@ import org.springframework.security.web.authentication.session.ChangeSessionIdAu
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
@@ -42,8 +43,13 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         AuthenticationManager am = authenticationManager();
         SecurityContextRepository repository = securityContextRepository();
+        CookieCsrfTokenRepository csrfTokenRepository = new CookieCsrfTokenRepository();
+        XorCsrfTokenRequestAttributeHandler csrfTokenRequestHandler = new XorCsrfTokenRequestAttributeHandler();
 
-        http.csrf(CsrfConfigurer::spa);
+        http.csrf(csrf -> csrf
+            .csrfTokenRepository(csrfTokenRepository)
+            .csrfTokenRequestHandler(csrfTokenRequestHandler)
+        );
         http.formLogin(AbstractHttpConfigurer::disable);
         http.httpBasic(AbstractHttpConfigurer::disable);
         http.logout(AbstractHttpConfigurer::disable);
