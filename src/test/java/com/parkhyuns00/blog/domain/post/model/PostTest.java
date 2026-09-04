@@ -23,6 +23,7 @@ public class PostTest {
         assertThat(post.getContent()).isEqualTo("content");
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
         assertThat(post.getCategory()).isSameAs(category);
+        assertThat(post.getViewCount()).isZero();
     }
 
     @Test
@@ -37,6 +38,7 @@ public class PostTest {
         assertThat(post.getContent()).isEqualTo("content");
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(post.getCategory()).isSameAs(category);
+        assertThat(post.getViewCount()).isZero();
     }
 
     @Test
