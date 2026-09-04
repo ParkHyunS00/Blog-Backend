@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.domain.post.service;
 
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
+import com.parkhyuns00.blog.domain.post.cache.PostViewDeduplicationCache;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -28,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,6 +48,7 @@ public class PostService {
     private final TagService tagService;
     private final HtmlSanitizerUtil htmlSanitizerUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final PostViewDeduplicationCache postViewDeduplicationCache;
 
     @Transactional
     public PostCreateDto create(PostCreateRequest request) {
@@ -193,9 +196,25 @@ public class PostService {
         return postRepository.findPublishedPosts(condition, pageable);
     }
 
-    public PostDetailDto getPublishedPost(Long postId) {
-        return postRepository.findPublishedPostById(postId)
+    @Transactional
+    public PostDetailDto getPublishedPost(Long postId, UUID visitorId) {
+        PostDetailDto post = postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        if (!postViewDeduplicationCache.reserve(postId, visitorId)) return post;
+
+        try {
+            int affectedRows = postRepository.incrementViewCount(postId);
+
+            if (affectedRows == 0) {
+                throw new PostException(PostExceptionCode.POST_NOT_FOUND);
+            }
+        } catch (RuntimeException exception) {
+            postViewDeduplicationCache.release(postId, visitorId);
+            throw exception;
+        }
+
+        return post.withViewCount(post.viewCount() + 1);
     }
 
     private void deletePost(Long postId, PostStatus requiredStatus) {
