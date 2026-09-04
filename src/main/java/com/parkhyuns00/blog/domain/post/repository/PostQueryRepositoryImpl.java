@@ -54,7 +54,6 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
                 category.slug,
                 post.createdAt,
                 post.updatedAt
-
             ))
             .from(post)
             .join(post.category, category)
@@ -98,6 +97,7 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
                 post.title,
                 post.summary,
                 post.content,
+                post.viewCount,
                 postImage.id,
                 category.name,
                 category.slug,
@@ -144,6 +144,7 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             detail.title(),
             detail.summary(),
             detail.content(),
+            detail.viewCount(),
             detail.thumbnailImageId(),
             detail.categoryName(),
             detail.categorySlug(),

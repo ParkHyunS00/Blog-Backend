@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
+import com.parkhyuns00.blog.domain.post.controller.cookie.PostVisitorCookieManager;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -18,6 +19,8 @@ import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,6 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @WebMvcTest(PostController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -44,6 +48,9 @@ public class PostControllerTest {
 
     @MockitoBean
     private PostService postService;
+
+    @MockitoBean
+    private PostVisitorCookieManager visitorCookieManager;
 
     @Test
     @DisplayName("게시글 생성 요청이 성공하면 201 응답과 생성 결과를 반환한다.")
@@ -396,12 +403,15 @@ public class PostControllerTest {
     @Test
     @DisplayName("공개 게시글 상세 조회가 성공하면 게시글 정보를 반환한다.")
     void test_get_published_post_success() throws Exception {
+        UUID visitorId = UUID.randomUUID();
+        Cookie visitorCookie = new Cookie(PostVisitorCookieManager.COOKIE_NAME, visitorId.toString());
         LocalDateTime now = LocalDateTime.now();
         PostDetailDto detail = new PostDetailDto(
             1L,
             "title",
             "summary",
             "content",
+            25L,
             10L,
             "Backend",
             "backend",
@@ -414,15 +424,18 @@ public class PostControllerTest {
             now
         );
 
-        when(postService.getPublishedPost(1L)).thenReturn(detail);
+        when(visitorCookieManager.resolve(eq(visitorId.toString()), any(HttpServletResponse.class)))
+            .thenReturn(visitorId);
+        when(postService.getPublishedPost(1L, visitorId)).thenReturn(detail);
 
-        mockMvc.perform(get("/api/posts/1"))
+        mockMvc.perform(get("/api/posts/1").cookie(visitorCookie))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.postId").value(1))
             .andExpect(jsonPath("$.data.title").value("title"))
             .andExpect(jsonPath("$.data.summary").value("summary"))
             .andExpect(jsonPath("$.data.content").value("content"))
+            .andExpect(jsonPath("$.data.viewCount").value(25))
             .andExpect(jsonPath("$.data.thumbnailImageId").value(10))
             .andExpect(jsonPath("$.data.categoryName").value("Backend"))
             .andExpect(jsonPath("$.data.categorySlug").value("backend"))
@@ -432,13 +445,17 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.data.contentImageIds[1]").value(12))
             .andDo(print());
 
-        verify(postService).getPublishedPost(1L);
+        verify(visitorCookieManager).resolve(eq(visitorId.toString()), any(HttpServletResponse.class));
+        verify(postService).getPublishedPost(1L, visitorId);
     }
 
     @Test
     @DisplayName("공개 게시글을 찾을 수 없으면 404 를 반환한다.")
     void test_get_published_post_fail_when_not_found() throws Exception {
-        when(postService.getPublishedPost(999L)).thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
+        UUID visitorId = UUID.randomUUID();
+        when(visitorCookieManager.resolve(isNull(), any(HttpServletResponse.class))).thenReturn(visitorId);
+        when(postService.getPublishedPost(999L, visitorId))
+            .thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
 
         mockMvc.perform(get("/api/posts/999"))
             .andExpect(status().isNotFound())
@@ -447,7 +464,7 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.error.message").value("게시글을 찾을 수 없습니다."))
             .andDo(print());
 
-        verify(postService).getPublishedPost(999L);
+        verify(postService).getPublishedPost(999L, visitorId);
     }
 
     @Test
@@ -1069,4 +1086,5 @@ public class PostControllerTest {
 
         verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
     }
+
 }

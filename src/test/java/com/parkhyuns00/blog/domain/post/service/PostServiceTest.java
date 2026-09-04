@@ -9,6 +9,7 @@ import static org.mockito.Mockito.*;
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
+import com.parkhyuns00.blog.domain.post.cache.PostViewDeduplicationCache;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -33,6 +34,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -43,6 +45,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 public class PostServiceTest {
@@ -64,6 +67,9 @@ public class PostServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private PostViewDeduplicationCache postViewDeduplicationCache;
 
     @InjectMocks
     private PostService postService;
@@ -390,48 +396,6 @@ public class PostServiceTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
 
         verify(postRepository).findPublishedPosts(condition, pageable);
-    }
-
-    @Test
-    @DisplayName("공개 게시글 상세 조회를 요청하면 게시글 정보를 반환한다.")
-    void test_get_published_post_success() {
-        LocalDateTime now = LocalDateTime.now();
-        PostDetailDto detail = new PostDetailDto(
-            1L,
-            "title",
-            "summary",
-            "content",
-            10L,
-            "Backend",
-            "backend",
-            List.of(
-                new TagDto(1L, "Java", "java")
-            ),
-            List.of(11L, 12L),
-            now,
-            now
-        );
-
-        when(postRepository.findPublishedPostById(1L)).thenReturn(Optional.of(detail));
-
-        PostDetailDto result = postService.getPublishedPost(1L);
-
-        assertThat(result).isEqualTo(detail);
-
-        verify(postRepository).findPublishedPostById(1L);
-    }
-
-    @Test
-    @DisplayName("공개 게시글을 찾을 수 없으면 예외가 발생한다.")
-    void test_get_published_post_fail_when_not_found() {
-        when(postRepository.findPublishedPostById(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> postService.getPublishedPost(999L))
-            .isInstanceOf(PostException.class)
-            .extracting("exceptionCode")
-            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
-
-        verify(postRepository).findPublishedPostById(999L);
     }
 
     @Test
@@ -1402,6 +1366,117 @@ public class PostServiceTest {
         verify(postImageRepository, never()).findAllByPostId(postId);
         verify(postTagRepository, never()).deleteAllByPostId(postId);
         verify(postTagRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("방문자가 공개 게시글을 처음 조회하면 조회수를 증가시킨다.")
+    void test_get_published_post_success_when_first_view() {
+        Long postId = 1L;
+        UUID visitorId = UUID.randomUUID();
+        PostDetailDto detail = createPostDetail(10L);
+
+        when(postRepository.findPublishedPostById(postId)).thenReturn(Optional.of(detail));
+        when(postViewDeduplicationCache.reserve(postId, visitorId)).thenReturn(true);
+        when(postRepository.incrementViewCount(postId)).thenReturn(1);
+
+        PostDetailDto result = postService.getPublishedPost(postId, visitorId);
+
+        assertThat(result.viewCount()).isEqualTo(11L);
+
+        verify(postViewDeduplicationCache).reserve(postId, visitorId);
+        verify(postRepository).incrementViewCount(postId);
+        verify(postRepository).findPublishedPostById(postId);
+    }
+
+    @Test
+    @DisplayName("동일한 방문자가 공개 게시글을 다시 조회하면 조회수를 증가시키지 않는다.")
+    void test_get_published_post_success_when_duplicate_view() {
+        Long postId = 1L;
+        UUID visitorId = UUID.randomUUID();
+        PostDetailDto detail = createPostDetail(10L);
+
+        when(postRepository.findPublishedPostById(postId)).thenReturn(Optional.of(detail));
+        when(postViewDeduplicationCache.reserve(postId, visitorId)).thenReturn(false);
+
+        PostDetailDto result = postService.getPublishedPost(postId, visitorId);
+
+        assertThat(result.viewCount()).isEqualTo(10L);
+
+        verify(postViewDeduplicationCache).reserve(postId, visitorId);
+        verify(postRepository, never()).incrementViewCount(postId);
+    }
+
+    @Test
+    @DisplayName("공개 게시글을 찾을 수 없으면 예외가 발생한다.")
+    void test_get_published_post_fail_when_post_not_found() {
+        Long postId = 999L;
+        UUID visitorId = UUID.randomUUID();
+
+        when(postRepository.findPublishedPostById(postId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.getPublishedPost(postId, visitorId))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postRepository).findPublishedPostById(postId);
+        verifyNoInteractions(postViewDeduplicationCache);
+        verify(postRepository, never()).incrementViewCount(postId);
+    }
+
+    @Test
+    @DisplayName("조회수 증가에 실패하면 캐시 예약을 해제한다.")
+    void test_get_published_post_release_cache_when_increment_failed() {
+        Long postId = 1L;
+        UUID visitorId = UUID.randomUUID();
+        PostDetailDto detail = createPostDetail(10L);
+        DataAccessResourceFailureException exception = new DataAccessResourceFailureException("조회수 증가 실패");
+
+        when(postRepository.findPublishedPostById(postId)).thenReturn(Optional.of(detail));
+        when(postViewDeduplicationCache.reserve(postId, visitorId)).thenReturn(true);
+        when(postRepository.incrementViewCount(postId)).thenThrow(exception);
+
+        assertThatThrownBy(() -> postService.getPublishedPost(postId, visitorId)).isSameAs(exception);
+
+        verify(postViewDeduplicationCache).release(postId, visitorId);
+    }
+
+    @Test
+    @DisplayName("조회수 증가 대상이 사라지면 캐시 예약을 해제하고 예외가 발생한다.")
+    void test_get_published_post_fail_when_increment_target_not_found() {
+        Long postId = 1L;
+        UUID visitorId = UUID.randomUUID();
+        PostDetailDto detail = createPostDetail(10L);
+
+        when(postRepository.findPublishedPostById(postId)).thenReturn(Optional.of(detail));
+        when(postViewDeduplicationCache.reserve(postId, visitorId)).thenReturn(true);
+        when(postRepository.incrementViewCount(postId)).thenReturn(0);
+
+        assertThatThrownBy(() -> postService.getPublishedPost(postId, visitorId))
+            .isInstanceOf(PostException.class)
+            .extracting("exceptionCode")
+            .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
+
+        verify(postViewDeduplicationCache).release(postId, visitorId);
+    }
+
+    private PostDetailDto createPostDetail(long viewCount) {
+        LocalDateTime now = LocalDateTime.now();
+
+        return new PostDetailDto(
+            1L,
+            "title",
+            "summary",
+            "content",
+            viewCount,
+            null,
+            "Backend",
+            "backend",
+            List.of(),
+            List.of(),
+            now,
+            now
+        );
     }
 
     private PostCreateRequest createRequest(

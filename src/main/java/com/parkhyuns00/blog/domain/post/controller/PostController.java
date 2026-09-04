@@ -1,5 +1,6 @@
 package com.parkhyuns00.blog.domain.post.controller;
 
+import com.parkhyuns00.blog.domain.post.controller.cookie.PostVisitorCookieManager;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -8,6 +9,7 @@ import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.global.response.PageResponse;
 import com.parkhyuns00.blog.global.response.StandardResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -15,11 +17,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequiredArgsConstructor
 public class PostController {
 
     private final PostService postService;
+    private final PostVisitorCookieManager visitorCookieManager;
 
     @PostMapping("/api/admin/posts")
     public ResponseEntity<StandardResponse<PostCreateDto>> create(@Valid @RequestBody PostCreateRequest request) {
@@ -87,7 +92,13 @@ public class PostController {
     }
 
     @GetMapping("/api/posts/{postId}")
-    public ResponseEntity<StandardResponse<PostDetailDto>> getPublishedPost(@PathVariable Long postId) {
-        return StandardResponse.ok(postService.getPublishedPost(postId));
+    public ResponseEntity<StandardResponse<PostDetailDto>> getPublishedPost(
+        @PathVariable Long postId,
+        @CookieValue(name = PostVisitorCookieManager.COOKIE_NAME, required = false) String visitorCookie,
+        HttpServletResponse response
+    ) {
+        UUID visitorId = visitorCookieManager.resolve(visitorCookie, response);
+
+        return StandardResponse.ok(postService.getPublishedPost(postId, visitorId));
     }
 }

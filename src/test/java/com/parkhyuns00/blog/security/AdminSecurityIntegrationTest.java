@@ -23,11 +23,13 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -363,13 +366,16 @@ public class AdminSecurityIntegrationTest {
     @Test
     @DisplayName("모든 사용자는 공개 게시글 상세 정보를 조회할 수 있다.")
     void test_unauthenticated_user_can_get_published_post() throws Exception {
+        UUID visitorId = UUID.randomUUID();
+        Cookie visitorCookie = new Cookie("BLOG_VISITOR_ID", visitorId.toString());
         LocalDateTime now = LocalDateTime.now();
-        when(postService.getPublishedPost(1L))
+        when(postService.getPublishedPost(1L, visitorId))
             .thenReturn(new PostDetailDto(
                 1L,
                 "title",
                 "summary",
                 "content",
+                0L,
                 10L,
                 "Backend",
                 "backend",
@@ -379,9 +385,11 @@ public class AdminSecurityIntegrationTest {
                 now
             ));
 
-        mockMvc.perform(get("/api/posts/1"))
+        mockMvc.perform(get("/api/posts/1").cookie(visitorCookie))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.postId").value(1));
+
+        verify(postService).getPublishedPost(1L, visitorId);
     }
 
     @Test
@@ -795,6 +803,50 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
 
         verify(postService).updatePublishedPost(eq(1L), any(PostCreateRequest.class));
+    }
+
+    @Test
+    @DisplayName("방문자 쿠키 없이 상세 조회하면 새로운 UUID 쿠키를 발급한다.")
+    void test_get_published_post_issue_visitor_cookie_when_missing() throws Exception {
+        Long postId = 1L;
+        LocalDateTime now = LocalDateTime.now();
+
+        when(postService.getPublishedPost(eq(postId), any(UUID.class)))
+            .thenReturn(new PostDetailDto(
+                postId,
+                "title",
+                "summary",
+                "content",
+                11L,
+                null,
+                "Backend",
+                "backend",
+                List.of(),
+                List.of(),
+                now,
+                now
+            ));
+
+        MvcResult result = mockMvc.perform(get("/api/posts/{postId}", postId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.viewCount").value(11))
+            .andExpect(header().exists(HttpHeaders.SET_COOKIE))
+            .andReturn();
+
+        ArgumentCaptor<UUID> visitorIdCaptor = ArgumentCaptor.forClass(UUID.class);
+
+        verify(postService).getPublishedPost(eq(postId), visitorIdCaptor.capture());
+
+        UUID issuedVisitorId = visitorIdCaptor.getValue();
+        String setCookie = result.getResponse().getHeader(HttpHeaders.SET_COOKIE);
+
+        assertThat(setCookie).contains(
+            "BLOG_VISITOR_ID=" + issuedVisitorId,
+            "Max-Age=31536000",
+            "Path=/",
+            "HttpOnly",
+            "SameSite=Lax"
+        );
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {
