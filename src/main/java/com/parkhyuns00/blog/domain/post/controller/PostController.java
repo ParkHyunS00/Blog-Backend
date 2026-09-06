@@ -17,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -100,5 +101,10 @@ public class PostController {
         UUID visitorId = visitorCookieManager.resolve(visitorCookie, response);
 
         return StandardResponse.ok(postService.getPublishedPost(postId, visitorId));
+    }
+
+    @GetMapping("/api/posts/popular")
+    public ResponseEntity<StandardResponse<List<PostPopularDto>>> getPopularPosts() {
+        return StandardResponse.ok(postService.getPopularPosts());
     }
 }

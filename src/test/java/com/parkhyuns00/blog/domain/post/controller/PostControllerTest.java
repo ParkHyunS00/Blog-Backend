@@ -1087,4 +1087,46 @@ public class PostControllerTest {
         verify(postService, never()).updatePublishedPost(anyLong(), any(PostCreateRequest.class));
     }
 
+    @Test
+    @DisplayName("인기 게시글 조회가 성공하면 게시글 정보를 반환한다.")
+    void test_get_popular_posts_success() throws Exception {
+        when(postService.getPopularPosts())
+            .thenReturn(List.of(
+                new PostPopularDto(
+                    1L,
+                    "인기 게시글",
+                    "Backend",
+                    "backend",
+                    LocalDateTime.of(2026, 9, 6, 12, 0),
+                    100L
+                )
+            ));
+
+        mockMvc.perform(get("/api/posts/popular"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].postId").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("인기 게시글"))
+            .andExpect(jsonPath("$.data[0].categoryName").value("Backend"))
+            .andExpect(jsonPath("$.data[0].categorySlug").value("backend"))
+            .andExpect(jsonPath("$.data[0].createdAt").value("2026-09-06T12:00:00"))
+            .andExpect(jsonPath("$.data[0].viewCount").value(100));
+
+        verify(postService).getPopularPosts();
+    }
+
+    @Test
+    @DisplayName("인기 게시글이 없으면 200 응답과 빈 배열을 반환한다.")
+    void test_get_popular_posts_success_when_empty() throws Exception {
+        when(postService.getPopularPosts()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/posts/popular"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(postService).getPopularPosts();
+    }
 }

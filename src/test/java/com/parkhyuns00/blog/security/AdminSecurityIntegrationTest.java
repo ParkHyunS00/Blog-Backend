@@ -868,6 +868,19 @@ public class AdminSecurityIntegrationTest {
         verify(categoryService).getCategoriesWithLatestPost();
     }
 
+    @Test
+    @DisplayName("모든 사용자는 인기 게시글 목록을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_popular_posts() throws Exception {
+        when(postService.getPopularPosts()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/posts/popular"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(postService).getPopularPosts();
+    }
 
     private MockHttpSession adminKeyLogin() throws Exception {
         CsrfTokenFixture csrf = issueCsrfToken();
