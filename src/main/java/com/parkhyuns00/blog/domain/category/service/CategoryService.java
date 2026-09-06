@@ -6,6 +6,7 @@ import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.repository.CategoryRepository;
 import com.parkhyuns00.blog.domain.category.repository.dto.CategoryWithPostCountDto;
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryWithLatestPostDto;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.util.SlugUtil;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,10 @@ public class CategoryService {
 
     public List<CategoryWithPostCountDto> getCategoriesWithPostCount() {
         return categoryRepository.findAllWithPostCount(PostStatus.PUBLISHED);
+    }
+
+    public List<CategoryWithLatestPostDto> getCategoriesWithLatestPost() {
+        return categoryRepository.findAllWithLatestPost(PostStatus.PUBLISHED);
     }
 
     @Transactional
