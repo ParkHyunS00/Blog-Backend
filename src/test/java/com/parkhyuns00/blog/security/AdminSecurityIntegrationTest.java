@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.parkhyuns00.blog.config.security.dto.AdminProperties;
 import com.parkhyuns00.blog.domain.auth.repository.AdminAuthAttemptRepository;
+import com.parkhyuns00.blog.domain.category.service.CategoryService;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -75,6 +76,9 @@ public class AdminSecurityIntegrationTest {
 
     @MockitoBean
     private PostImageService postImageService;
+
+    @MockitoBean
+    private CategoryService categoryService;
 
     @MockitoBean
     private GarageUtil garageUtil;
@@ -848,6 +852,22 @@ public class AdminSecurityIntegrationTest {
             "SameSite=Lax"
         );
     }
+
+    @Test
+    @DisplayName("모든 사용자는 카테고리별 최신 공개 게시글을 조회할 수 있다.")
+    void test_unauthenticated_user_can_get_categories_with_latest_post() throws Exception {
+        when(categoryService.getCategoriesWithLatestPost())
+            .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/categories/latest-posts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(categoryService).getCategoriesWithLatestPost();
+    }
+
 
     private MockHttpSession adminKeyLogin() throws Exception {
         CsrfTokenFixture csrf = issueCsrfToken();

@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.domain.category.controller;
 
 import com.parkhyuns00.blog.domain.category.repository.dto.CategoryWithPostCountDto;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryWithLatestPostDto;
 import com.parkhyuns00.blog.global.response.StandardResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,5 +20,10 @@ public class CategoryController {
     @GetMapping("/api/categories")
     public ResponseEntity<StandardResponse<List<CategoryWithPostCountDto>>> getCategoriesWithPostCount() {
         return StandardResponse.ok(categoryService.getCategoriesWithPostCount());
+    }
+
+    @GetMapping("/api/categories/latest-posts")
+    public ResponseEntity<StandardResponse<List<CategoryWithLatestPostDto>>> getCategoriesWithLatestPost() {
+        return StandardResponse.ok(categoryService.getCategoriesWithLatestPost());
     }
 }

@@ -71,7 +71,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/api/posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/post-images/*").permitAll()
-            .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/categories", "/api/categories/latest-posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/tags").permitAll()
 
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/logout").hasRole(AdminRole.ADMIN.name())
