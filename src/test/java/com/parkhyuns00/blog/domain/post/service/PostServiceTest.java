@@ -35,10 +35,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -1458,6 +1455,35 @@ public class PostServiceTest {
             .isEqualTo(PostExceptionCode.POST_NOT_FOUND);
 
         verify(postViewDeduplicationCache).release(postId, visitorId);
+    }
+
+    @Test
+    @DisplayName("인기 게시글 조회 시 공개 게시글을 최대 3개 요청한다.")
+    void test_get_popular_posts_success() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 9, 6, 12, 0);
+
+        List<PostPopularDto> expected = List.of(
+            new PostPopularDto(
+                1L,
+                "인기 게시글",
+                "Backend",
+                "backend",
+                createdAt,
+                100L
+            )
+        );
+
+        when(postRepository.findPopularPosts(eq(PostStatus.PUBLISHED), any(Limit.class))).thenReturn(expected);
+
+        List<PostPopularDto> result = postService.getPopularPosts();
+
+        assertThat(result).isEqualTo(expected);
+
+        ArgumentCaptor<Limit> limitCaptor = ArgumentCaptor.forClass(Limit.class);
+
+        verify(postRepository).findPopularPosts(eq(PostStatus.PUBLISHED), limitCaptor.capture());
+
+        assertThat(limitCaptor.getValue().max()).isEqualTo(3);
     }
 
     private PostDetailDto createPostDetail(long viewCount) {
