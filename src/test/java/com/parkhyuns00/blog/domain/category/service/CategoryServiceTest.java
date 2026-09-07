@@ -12,6 +12,8 @@ import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.repository.CategoryRepository;
 import com.parkhyuns00.blog.domain.category.repository.dto.CategoryWithPostCountDto;
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryLatestPostDto;
+import com.parkhyuns00.blog.domain.category.service.dto.CategoryWithLatestPostDto;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.util.SlugUtil;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +26,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -223,5 +226,34 @@ public class CategoryServiceTest {
 
         verify(categoryRepository).saveAndFlush(any(Category.class));
         verify(categoryRepository).findBySlug("spring");
+    }
+
+    @Test
+    @DisplayName("카테고리별 최신 공개 게시글 조회 결과를 반환한다.")
+    void test_get_categories_with_latest_post_success() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 9, 1, 12, 0);
+
+        List<CategoryWithLatestPostDto> expected = List.of(
+            new CategoryWithLatestPostDto(
+                1L,
+                "Backend",
+                "backend",
+                3L,
+                new CategoryLatestPostDto(
+                    10L,
+                    "게시글 제목",
+                    "게시글 요약",
+                    createdAt
+                )
+            )
+        );
+
+        when(categoryRepository.findAllWithLatestPost(PostStatus.PUBLISHED)).thenReturn(expected);
+
+        List<CategoryWithLatestPostDto> result = categoryService.getCategoriesWithLatestPost();
+
+        assertThat(result).isEqualTo(expected);
+
+        verify(categoryRepository).findAllWithLatestPost(PostStatus.PUBLISHED);
     }
 }

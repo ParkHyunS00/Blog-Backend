@@ -19,6 +19,7 @@ import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +41,7 @@ public class PostService {
 
     private static final Pattern CONTENT_IMAGE_PATTERN = Pattern.compile("src=\"/api/post-images/([1-9][0-9]*)\"");
     private static final int DRAFT_PAGE_SIZE = 10;
+    private static final int POPULAR_POST_LIMIT = 3;
 
     private final PostRepository postRepository;
     private final PostTagRepository postTagRepository;
@@ -215,6 +217,10 @@ public class PostService {
         }
 
         return post.withViewCount(post.viewCount() + 1);
+    }
+
+    public List<PostPopularDto> getPopularPosts() {
+        return postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(POPULAR_POST_LIMIT));
     }
 
     private void deletePost(Long postId, PostStatus requiredStatus) {
