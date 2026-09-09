@@ -60,6 +60,15 @@ dependencies {
 	// Webp metadata
 	implementation 'com.twelvemonkeys.imageio:imageio-webp:3.14.0'
 
+	// Caffeine Cache
+	implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
+
+	// Spring Boot Actuator
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// Prometheus
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'

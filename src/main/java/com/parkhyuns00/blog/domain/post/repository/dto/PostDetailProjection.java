@@ -7,6 +7,7 @@ public record PostDetailProjection(
     String title,
     String summary,
     String content,
+    long viewCount,
     Long thumbnailImageId,
     String categoryName,
     String categorySlug,

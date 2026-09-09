@@ -305,8 +305,8 @@ public class PostQueryRepositoryTest {
         assertThat(detail.tags())
             .extracting(TagDto::slug)
             .containsExactly("java");
-        assertThat(detail.contentImageIds())
-            .containsExactly(contentImage.getId());
+        assertThat(detail.contentImageIds()).containsExactly(contentImage.getId());
+        assertThat(detail.viewCount()).isZero();
     }
 
     @Test

@@ -10,6 +10,7 @@ public record PostDetailDto(
     String title,
     String summary,
     String content,
+    long viewCount,
     Long thumbnailImageId,
     String categoryName,
     String categorySlug,
@@ -21,5 +22,22 @@ public record PostDetailDto(
     public PostDetailDto {
         tags = tags == null ? List.of() : List.copyOf(tags);
         contentImageIds = contentImageIds == null ? List.of() : List.copyOf(contentImageIds);
+    }
+
+    public PostDetailDto withViewCount(long viewCount) {
+        return new PostDetailDto(
+            postId,
+            title,
+            summary,
+            content,
+            viewCount,
+            thumbnailImageId,
+            categoryName,
+            categorySlug,
+            tags,
+            contentImageIds,
+            createdAt,
+            updatedAt
+        );
     }
 }

@@ -8,8 +8,10 @@ import com.parkhyuns00.blog.config.security.provider.AdminKeyAuthenticationProvi
 import com.parkhyuns00.blog.config.security.provider.AdminOtpAuthenticationProvider;
 import com.parkhyuns00.blog.config.security.role.AdminRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -38,6 +40,28 @@ public class SecurityConfig {
     private final AdminOtpAuthenticationProvider adminOtpAuthenticationProvider;
     private final AdminAuthenticationSuccessHandler adminAuthenticationSuccessHandler;
     private final AdminAuthenticationFailureHandler adminAuthenticationFailureHandler;
+
+    @Bean
+    @Order(1)
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) {
+        http.securityMatcher(EndpointRequest.toAnyEndpoint());
+
+        http.authorizeHttpRequests(auth ->
+            auth.requestMatchers(
+                HttpMethod.GET,
+                "/actuator",
+                "/actuator/health",
+                "/actuator/metrics",
+                "/actuator/metrics/**",
+                "/actuator/prometheus"
+            ).permitAll().anyRequest().denyAll());
+
+        http.sessionManagement(session ->
+            session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        );
+
+        return http.build();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
@@ -71,7 +95,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/api/posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/post-images/*").permitAll()
-            .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/categories", "/api/categories/latest-posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/tags").permitAll()
 
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/logout").hasRole(AdminRole.ADMIN.name())

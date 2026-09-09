@@ -31,6 +31,9 @@ public class Post extends BaseEntity {
     @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
+    @Column(name = "view_count", nullable = false)
+    private long viewCount = 0L;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PostStatus status;

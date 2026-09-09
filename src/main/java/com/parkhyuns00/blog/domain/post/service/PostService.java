@@ -2,6 +2,7 @@ package com.parkhyuns00.blog.domain.post.service;
 
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.service.CategoryService;
+import com.parkhyuns00.blog.domain.post.cache.PostViewDeduplicationCache;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -18,6 +19,7 @@ import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,6 +41,7 @@ public class PostService {
 
     private static final Pattern CONTENT_IMAGE_PATTERN = Pattern.compile("src=\"/api/post-images/([1-9][0-9]*)\"");
     private static final int DRAFT_PAGE_SIZE = 10;
+    private static final int POPULAR_POST_LIMIT = 3;
 
     private final PostRepository postRepository;
     private final PostTagRepository postTagRepository;
@@ -46,6 +50,7 @@ public class PostService {
     private final TagService tagService;
     private final HtmlSanitizerUtil htmlSanitizerUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final PostViewDeduplicationCache postViewDeduplicationCache;
 
     @Transactional
     public PostCreateDto create(PostCreateRequest request) {
@@ -193,9 +198,29 @@ public class PostService {
         return postRepository.findPublishedPosts(condition, pageable);
     }
 
-    public PostDetailDto getPublishedPost(Long postId) {
-        return postRepository.findPublishedPostById(postId)
+    @Transactional
+    public PostDetailDto getPublishedPost(Long postId, UUID visitorId) {
+        PostDetailDto post = postRepository.findPublishedPostById(postId)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+
+        if (!postViewDeduplicationCache.reserve(postId, visitorId)) return post;
+
+        try {
+            int affectedRows = postRepository.incrementViewCount(postId);
+
+            if (affectedRows == 0) {
+                throw new PostException(PostExceptionCode.POST_NOT_FOUND);
+            }
+        } catch (RuntimeException exception) {
+            postViewDeduplicationCache.release(postId, visitorId);
+            throw exception;
+        }
+
+        return post.withViewCount(post.viewCount() + 1);
+    }
+
+    public List<PostPopularDto> getPopularPosts() {
+        return postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(POPULAR_POST_LIMIT));
     }
 
     private void deletePost(Long postId, PostStatus requiredStatus) {
