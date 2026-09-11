@@ -1,15 +1,15 @@
-name: CD
+name: CD-Staging
 
 on:
   pull_request:
     types:
       - closed
     branches:
-      - main
+      - develop
   workflow_dispatch:
 
 concurrency:
-  group: 'production-deployment'
+  group: 'staging-deployment'
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
 
     permissions:
       contents: read
-      packages: write # 이미지 push 권한
+      packages: write
 
     outputs:
       image_tag: ${{ steps.image-tag.outputs.image_tag }}
@@ -55,7 +55,7 @@ jobs:
 
       - name: Set image tag
         id: image-tag
-        run: echo "image_tag=latest" >> "$GITHUB_OUTPUT"
+        run: echo "image_tag=staging" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -77,12 +77,12 @@ jobs:
       packages: read
 
     steps:
-      - name: Deploy on backend server
+      - name: Deploy on staging backend server
         env:
           IMAGE_NAME: ghcr.io/${{ needs.build-and-push.outputs.repo_name }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          ssh blog-backend "
+          ssh blog-backend-staging "
             export DOCKER_IMAGE=${IMAGE_NAME}
             export DOCKER_TAG=${IMAGE_TAG}
             cd /opt/blog-backend
@@ -102,23 +102,23 @@ jobs:
         uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_DEPLOY_NOTI_WEBHOOK }}
-          embed-title: "🚀 Blog Backend 배포 성공 🚀"
+          embed-title: "🧪 Blog Backend 스테이징 배포 성공"
           embed-description: |
-            main PR 병합이 성공적으로 배포되었습니다.
+            develop PR 병합이 스테이징 서버에 성공적으로 배포되었습니다.
             > **Commit**: `${{ github.sha }}`
             > **Tag**: `${{ needs.build-and-push.outputs.image_tag }}`
           embed-color: 3066993
           embed-author-name: ${{ github.actor }}
-          embed-footer-text: "Blog Backend CI/CD"
+          embed-footer-text: "Blog Backend Staging CD"
 
       - name: Notify failure
         if: needs.build-and-push.result == 'failure' || needs.deploy.result == 'failure'
         uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_DEPLOY_NOTI_WEBHOOK }}
-          embed-title: "🚨 Blog Backend 배포 실패 🚨"
+          embed-title: "🚨 Blog Backend 스테이징 배포 실패"
           embed-description: |
-            배포 중 오류가 발생했습니다.
+            스테이징 배포 중 오류가 발생했습니다.
 
             > **build-and-push**: `${{ needs.build-and-push.result }}`
             > **deploy**: `${{ needs.deploy.result }}`
@@ -127,4 +127,4 @@ jobs:
             👉 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           embed-color: 15158332
           embed-author-name: ${{ github.actor }}
-          embed-footer-text: "Blog Backend CI/CD"
+          embed-footer-text: "Blog Backend Staging CD"
