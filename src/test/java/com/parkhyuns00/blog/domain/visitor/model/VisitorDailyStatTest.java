@@ -3,6 +3,8 @@ package com.parkhyuns00.blog.domain.visitor.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorException;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorExceptionCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +26,8 @@ public class VisitorDailyStatTest {
     @Test
     @DisplayName("집계 날짜가 없으면 일별 집계 생성에 실패한다.")
     void test_create_visitor_daily_stats_fail_when_visit_date_null() {
-        assertThatThrownBy(() -> new VisitorDailyStat(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new VisitorDailyStat(null))
+            .isInstanceOfSatisfying(VisitorException.class, exception ->
+                assertThat(exception.getExceptionCode()).isEqualTo(VisitorExceptionCode.INVALID_VISIT_DATE));
     }
 }

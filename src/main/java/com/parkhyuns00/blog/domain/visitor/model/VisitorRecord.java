@@ -1,6 +1,8 @@
 package com.parkhyuns00.blog.domain.visitor.model;
 
 import com.parkhyuns00.blog.domain.common.model.BaseEntity;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorException;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorExceptionCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,7 +35,15 @@ public class VisitorRecord extends BaseEntity {
     private LocalDate visitDate;
 
     public VisitorRecord(UUID visitorId, LocalDate visitDate) {
-        this.visitorId = Objects.requireNonNull(visitorId, "visitorId must not be null").toString();
-        this.visitDate = Objects.requireNonNull(visitDate, "visitDate must not be null");
+        if (visitorId == null) {
+            throw new VisitorException(VisitorExceptionCode.INVALID_VISITOR_ID);
+        }
+
+        if (visitDate == null) {
+            throw new VisitorException(VisitorExceptionCode.INVALID_VISIT_DATE);
+        }
+
+        this.visitorId = visitorId.toString();
+        this.visitDate = visitDate;
     }
 }

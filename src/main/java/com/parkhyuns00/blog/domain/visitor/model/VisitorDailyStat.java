@@ -1,6 +1,8 @@
 package com.parkhyuns00.blog.domain.visitor.model;
 
 import com.parkhyuns00.blog.domain.common.model.BaseEntity;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorException;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorExceptionCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -26,6 +28,10 @@ public class VisitorDailyStat extends BaseEntity {
     private long visitorCount = 0L;
 
     public VisitorDailyStat(LocalDate visitDate) {
-        this.visitDate = Objects.requireNonNull(visitDate, "visitDate must not be null");
+        if (visitDate == null) {
+            throw new VisitorException(VisitorExceptionCode.INVALID_VISIT_DATE);
+        }
+
+        this.visitDate = visitDate;
     }
 }

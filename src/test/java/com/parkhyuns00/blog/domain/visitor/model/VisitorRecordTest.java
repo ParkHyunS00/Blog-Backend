@@ -3,6 +3,8 @@ package com.parkhyuns00.blog.domain.visitor.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorException;
+import com.parkhyuns00.blog.domain.visitor.exception.VisitorExceptionCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +30,9 @@ public class VisitorRecordTest {
     void test_create_visitor_record_fail_when_visitor_id_null() {
         LocalDate visitDate = LocalDate.of(2026, 9, 12);
 
-        assertThatThrownBy(() -> new VisitorRecord(null, visitDate)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new VisitorRecord(null, visitDate))
+            .isInstanceOfSatisfying(VisitorException.class, exception ->
+                assertThat(exception.getExceptionCode()).isEqualTo(VisitorExceptionCode.INVALID_VISITOR_ID));
     }
 
     @Test
@@ -36,6 +40,8 @@ public class VisitorRecordTest {
     void test_create_visitor_record_fail_when_visit_date_null() {
         UUID visitorId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> new VisitorRecord(visitorId, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new VisitorRecord(visitorId, null))
+            .isInstanceOfSatisfying(VisitorException.class, exception ->
+                assertThat(exception.getExceptionCode()).isEqualTo(VisitorExceptionCode.INVALID_VISIT_DATE));
     }
 }
