@@ -1,4 +1,4 @@
-package com.parkhyuns00.blog.domain.post.controller.cookie;
+package com.parkhyuns00.blog.global.web.cookie;
 
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,26 +10,27 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.UUID;
 
-@Component
-public class PostVisitorCookieManager {
+@Component("commonVisitorCookieManager")
+public class VisitorCookieManager {
 
-    public static final String COOKIE_NAME = "BLOG_VISITOR_ID";
     private static final Duration COOKIE_MAX_AGE = Duration.ofDays(365);
 
     private final boolean secure;
 
-    public PostVisitorCookieManager(@Value("${app.post-view.cookie.secure}") boolean secure) {
+    public VisitorCookieManager(@Value("${app.visitor.cookie.secure}") boolean secure) {
         this.secure = secure;
     }
 
-    public UUID resolve(String cookieValue, HttpServletResponse response) {
+    public UUID resolve(String cookieName, String cookieValue, HttpServletResponse response) {
         UUID visitorId = parseVisitorId(cookieValue);
 
-        if (visitorId != null) return visitorId;
+        if (visitorId != null) {
+            return visitorId;
+        }
 
         UUID newVisitorId = UUID.randomUUID();
 
-        addVisitorCookie(response, newVisitorId);
+        addVisitorCookie(cookieName, newVisitorId, response);
 
         return newVisitorId;
     }
@@ -46,9 +47,9 @@ public class PostVisitorCookieManager {
         }
     }
 
-    private void addVisitorCookie(HttpServletResponse response, UUID visitorId) {
+    private void addVisitorCookie(String cookieName, UUID visitorId, HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie
-            .from(COOKIE_NAME, visitorId.toString())
+            .from(cookieName, visitorId.toString())
             .httpOnly(true)
             .secure(secure)
             .sameSite("Lax")

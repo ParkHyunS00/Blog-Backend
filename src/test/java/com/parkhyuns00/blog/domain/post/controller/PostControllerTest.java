@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
-import com.parkhyuns00.blog.domain.post.controller.cookie.PostVisitorCookieManager;
+import com.parkhyuns00.blog.global.web.cookie.VisitorCookieManager;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -50,7 +50,7 @@ public class PostControllerTest {
     private PostService postService;
 
     @MockitoBean
-    private PostVisitorCookieManager visitorCookieManager;
+    private VisitorCookieManager visitorCookieManager;
 
     @Test
     @DisplayName("게시글 생성 요청이 성공하면 201 응답과 생성 결과를 반환한다.")
@@ -404,7 +404,7 @@ public class PostControllerTest {
     @DisplayName("공개 게시글 상세 조회가 성공하면 게시글 정보를 반환한다.")
     void test_get_published_post_success() throws Exception {
         UUID visitorId = UUID.randomUUID();
-        Cookie visitorCookie = new Cookie(PostVisitorCookieManager.COOKIE_NAME, visitorId.toString());
+        Cookie visitorCookie = new Cookie("POST_VIEWER_ID", visitorId.toString());
         LocalDateTime now = LocalDateTime.now();
         PostDetailDto detail = new PostDetailDto(
             1L,
@@ -424,7 +424,7 @@ public class PostControllerTest {
             now
         );
 
-        when(visitorCookieManager.resolve(eq(visitorId.toString()), any(HttpServletResponse.class)))
+        when(visitorCookieManager.resolve(eq("POST_VIEWER_ID"), eq(visitorId.toString()), any(HttpServletResponse.class)))
             .thenReturn(visitorId);
         when(postService.getPublishedPost(1L, visitorId)).thenReturn(detail);
 
@@ -445,7 +445,7 @@ public class PostControllerTest {
             .andExpect(jsonPath("$.data.contentImageIds[1]").value(12))
             .andDo(print());
 
-        verify(visitorCookieManager).resolve(eq(visitorId.toString()), any(HttpServletResponse.class));
+        verify(visitorCookieManager).resolve(eq("POST_VIEWER_ID"), eq(visitorId.toString()), any(HttpServletResponse.class));
         verify(postService).getPublishedPost(1L, visitorId);
     }
 
@@ -453,7 +453,8 @@ public class PostControllerTest {
     @DisplayName("공개 게시글을 찾을 수 없으면 404 를 반환한다.")
     void test_get_published_post_fail_when_not_found() throws Exception {
         UUID visitorId = UUID.randomUUID();
-        when(visitorCookieManager.resolve(isNull(), any(HttpServletResponse.class))).thenReturn(visitorId);
+        when(visitorCookieManager.resolve(eq("POST_VIEWER_ID"), isNull(), any(HttpServletResponse.class)))
+            .thenReturn(visitorId);
         when(postService.getPublishedPost(999L, visitorId))
             .thenThrow(new PostException(PostExceptionCode.POST_NOT_FOUND));
 
