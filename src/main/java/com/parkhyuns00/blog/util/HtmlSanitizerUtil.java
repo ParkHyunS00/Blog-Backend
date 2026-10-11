@@ -6,11 +6,13 @@ import org.owasp.html.PolicyFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Component
 public class HtmlSanitizerUtil {
 
+    private static final Set<String> ALLOWED_QUOTE_STYLES = Set.of("note", "tip", "important", "warning", "caution");
     private static final Pattern POST_IMAGE_PATH_PATTERN = Pattern.compile("^/api/post-images/[1-9][0-9]*$");
     private static final Pattern CODE_CLASS_PATTERN = Pattern.compile("^language-[A-Za-z0-9][A-Za-z0-9_+.-]{0,63}$");
     private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
@@ -26,7 +28,9 @@ public class HtmlSanitizerUtil {
             .matches() ? normalizedValue : null;
     };
     private static final AttributePolicy IMAGE_DIMENSION_POLICY = (_, _, value) ->
-            IMAGE_DIMENSION_PATTERN.matcher(value).matches() ? value : null;
+        IMAGE_DIMENSION_PATTERN.matcher(value).matches() ? value : null;
+    private static final AttributePolicy QUOTE_STYLE_POLICY = (_, _, value) ->
+        ALLOWED_QUOTE_STYLES.contains(value) ? value : null;
 
     private static final PolicyFactory POLICY = new HtmlPolicyBuilder()
         .allowElements(
@@ -59,6 +63,10 @@ public class HtmlSanitizerUtil {
         .allowAttributes("data-color")
         .matching(HEX_COLOR_POLICY)
         .onElements("mark")
+
+        .allowAttributes("data-quote-style")
+        .matching(QUOTE_STYLE_POLICY)
+        .onElements("blockquote")
 
         .allowAttributes("class")
         .onElements("figure", "div", "span")
