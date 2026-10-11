@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class HtmlSanitizerUtilTest {
 
@@ -26,6 +28,79 @@ public class HtmlSanitizerUtilTest {
             .contains("<p><strong>강조된 내용</strong></p>")
             .contains("<blockquote>인용문</blockquote>")
             .contains("<ul><li>목록</li></ul>");
+    }
+
+    @Test
+    @DisplayName("인용문 스타일 속성과 제목, 아이콘, 본문 구조를 유지한다.")
+    void test_sanitize_allow_blockquote_style() {
+        String html = """
+              <blockquote data-quote-style="note">
+                <div class="quote-title">
+                  <span class="quote-icon"></span>
+                  <span>Note</span>
+                </div>
+                <div class="quote-content">
+                  <p>인용 본문</p>
+                </div>
+              </blockquote>
+              """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .contains("<blockquote data-quote-style=\"note\">")
+            .contains("<div class=\"quote-title\">")
+            .contains("<span class=\"quote-icon\"></span>")
+            .contains("Note")
+            .contains("<div class=\"quote-content\">")
+            .contains("<p>인용 본문</p>")
+            .contains("</blockquote>");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"note", "tip", "important", "warning", "caution"})
+    @DisplayName("허용 목록에 포함된 인용문 스타일을 유지한다.")
+    void test_sanitize_allow_supported_quote_styles(String style) {
+        String html = "<blockquote data-quote-style=\"" + style + "\"><p>인용 본문</p></blockquote>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html)).isEqualTo(html);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "", "unknown", "NOTE", "note tip", "note-warning",
+        "javascript:alert(1)", "note&quot; onclick=&quot;alert(1)",
+        "&lt;script&gt;alert(1)&lt;/script&gt;"
+    })
+    @DisplayName("허용되지 않은 인용문 스타일과 속성 내부의 XSS 입력을 제거한다.")
+    void test_sanitize_remove_invalid_quote_styles(String style) {
+        String html = "<blockquote data-quote-style=\"" + style + "\"><p>인용 본문</p></blockquote>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<blockquote><p>인용 본문</p></blockquote>");
+    }
+
+    @Test
+    @DisplayName("인용문 스타일은 blockquote에만 허용하고 이벤트와 style 속성은 제거한다.")
+    void test_sanitize_restrict_blockquote_attributes() {
+        String html = """
+              <blockquote data-quote-style="note" onclick="alert('xss')" style="color: red">
+                <p data-quote-style="note">인용 본문</p>
+                <script>alert('xss')</script>
+                <a href="javascript:alert('xss')">위험한 링크</a>
+                <img src="/api/post-images/1" onerror="alert('xss')">
+              </blockquote>
+              <div data-quote-style="note">일반 본문</div>
+              """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .contains("<blockquote data-quote-style=\"note\">")
+            .contains("<p>인용 본문</p>")
+            .contains("<div>일반 본문</div>")
+            .contains("src=\"/api/post-images/1\"")
+            .doesNotContain("onclick", "onerror", "style=\"color", "alert(", "<script", "javascript:");
     }
 
     @Test
