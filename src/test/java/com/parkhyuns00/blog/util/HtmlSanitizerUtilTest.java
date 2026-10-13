@@ -104,6 +104,132 @@ public class HtmlSanitizerUtilTest {
     }
 
     @Test
+    @DisplayName("표의 equal 레이아웃과 셀 구조를 유지한다.")
+    void test_sanitize_allow_equal_table_layout() {
+        String html = "<table data-table-layout=\"equal\"><tbody><tr><td>항목</td><td>설명</td></tr></tbody></table>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html)).isEqualTo(html);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "", "auto", "EQUAL", "equal auto", "javascript:alert(1)",
+        "equal&quot; onclick=&quot;alert(1)"
+    })
+    @DisplayName("허용되지 않은 표 레이아웃은 제거하고 본문은 유지한다.")
+    void test_sanitize_remove_invalid_table_layout(String layout) {
+        String html = "<table data-table-layout=\"" + layout
+            + "\"><tbody><tr><td>항목</td></tr></tbody></table>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<table><tbody><tr><td>항목</td></tr></tbody></table>");
+    }
+
+    @Test
+    @DisplayName("표 레이아웃은 table에만 허용하고 이벤트와 인라인 스타일은 제거한다.")
+    void test_sanitize_restrict_table_layout_attributes() {
+        String html = """
+              <table data-table-layout="equal" onclick="alert(1)" style="table-layout: fixed">
+                <tbody data-table-layout="equal"><tr data-table-layout="equal">
+                  <td data-table-layout="equal" colspan="2">항목</td>
+                </tr></tbody>
+              </table>
+              <div data-table-layout="equal">본문</div>
+              """;
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .containsOnlyOnce("data-table-layout=\"equal\"")
+            .contains("<table data-table-layout=\"equal\">", "<td colspan=\"2\">항목</td>", "<div>본문</div>")
+            .doesNotContain("onclick", "style=", "alert(");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"striped", "minimal"})
+    @DisplayName("허용된 표 테마와 equal 레이아웃을 함께 유지한다.")
+    void test_sanitize_allow_table_themes(String theme) {
+        String html = "<table data-table-layout=\"equal\" data-table-theme=\"" + theme
+            + "\"><tbody><tr><td>항목</td><td>설명</td></tr></tbody></table>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html)).isEqualTo(html);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "", "unknown", "STRIPED", "striped minimal", "javascript:alert(1)",
+        "striped&quot; onclick=&quot;alert(1)"
+    })
+    @DisplayName("허용되지 않은 표 테마를 제거하고 레이아웃과 본문은 유지한다.")
+    void test_sanitize_remove_invalid_table_themes(String theme) {
+        String html = "<table data-table-layout=\"equal\" data-table-theme=\"" + theme
+            + "\"><tbody><tr><td>항목</td></tr></tbody></table>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<table data-table-layout=\"equal\"><tbody><tr><td>항목</td></tr></tbody></table>");
+    }
+
+    @Test
+    @DisplayName("표 테마는 table에만 허용하고 이벤트와 인라인 스타일은 제거한다.")
+    void test_sanitize_restrict_table_theme_attributes() {
+        String html = """
+              <table data-table-theme="striped" onclick="alert(1)" style="color: red">
+                <tbody data-table-theme="striped"><tr data-table-theme="striped">
+                  <td data-table-theme="striped">항목</td>
+                </tr></tbody>
+              </table>
+              <div data-table-theme="minimal">본문</div>
+              """;
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .containsOnlyOnce("data-table-theme=\"striped\"")
+            .contains("<table data-table-theme=\"striped\">", "<td>항목</td>", "<div>본문</div>")
+            .doesNotContain("minimal", "onclick", "style=", "alert(");
+    }
+
+    @Test
+    @DisplayName("접기 태그와 타입, 제목 및 본문 구조를 유지한다.")
+    void test_sanitize_allow_toggle_structure() {
+        String html = """
+              <details data-type="toggle">
+                <summary>접기 제목</summary>
+                <div data-type="toggle-content">
+                  <p>접힌 내용</p>
+                </div>
+              </details>
+              """;
+
+        assertThat(htmlSanitizerUtil.sanitize(html)).isEqualTo(html);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "unknown", "TOGGLE", "toggle-content", "toggle&quot; ontoggle=&quot;alert(1)"})
+    @DisplayName("details의 허용되지 않은 타입은 제거하고 접기 구조는 유지한다.")
+    void test_sanitize_remove_invalid_toggle_type(String type) {
+        String html = "<details data-type=\"" + type + "\"><summary>제목</summary><p>본문</p></details>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<details><summary>제목</summary><p>본문</p></details>");
+    }
+
+    @Test
+    @DisplayName("접기 구조의 이벤트, 인라인 스타일, 스크립트와 위험한 링크를 제거한다.")
+    void test_sanitize_remove_toggle_xss() {
+        String html = """
+              <details data-type="toggle" ontoggle="alert(1)" style="color: red">
+                <summary data-type="toggle" onclick="alert(1)">제목</summary>
+                <div data-type="toggle-content">
+                  <script>alert(1)</script>
+                  <a href="javascript:alert(1)">본문</a>
+                </div>
+              </details>
+              """;
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .contains("<details data-type=\"toggle\">", "<summary>제목</summary>",
+                "<div data-type=\"toggle-content\">", "본문", "</details>")
+            .doesNotContain("ontoggle", "onclick", "style=", "<script", "javascript:", "alert(");
+    }
+
+    @Test
     @DisplayName("script 태그와 내부 스크립트를 제거한다.")
     void test_sanitize_remove_script_element() {
         String html = """
