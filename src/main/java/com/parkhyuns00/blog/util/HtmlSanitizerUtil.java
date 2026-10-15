@@ -38,6 +38,8 @@ public class HtmlSanitizerUtil {
         ALLOWED_TABLE_THEMES.contains(value) ? value : null;
     private static final AttributePolicy TOGGLE_TYPE_POLICY = (_, _, value) ->
         "toggle".equals(value) ? value : null;
+    private static final AttributePolicy INLINE_MATH_TYPE_POLICY = (_, _, value) ->
+        "inline-math".equals(value) ? value : null;
 
     private static final PolicyFactory POLICY = new HtmlPolicyBuilder()
         .allowElements(
@@ -79,6 +81,13 @@ public class HtmlSanitizerUtil {
         .onElements("figure", "div", "span")
         .allowAttributes("data-type")
         .onElements("div")
+
+        .allowAttributes("data-type")
+        .matching(INLINE_MATH_TYPE_POLICY)
+        .onElements("span")
+
+        .allowAttributes("data-latex")
+        .onElements("span", "div")
 
         .allowAttributes("data-type")
         .matching(TOGGLE_TYPE_POLICY)
