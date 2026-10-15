@@ -16,6 +16,10 @@ import com.parkhyuns00.blog.domain.tag.repository.TagRepository;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -24,10 +28,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Optional;
 
 @ActiveProfiles("test")
-@DataJpaTest
+@DataJpaTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector="
+    + "com.parkhyuns00.blog.domain.post.repository.PostQueryRepositoryTest$SqlCapture")
 @Import({
     QueryDslConfig.class,
     JpaConfig.class
@@ -48,6 +55,56 @@ public class PostQueryRepositoryTest {
 
     @Autowired
     private PostTagRepository postTagRepository;
+
+    public static class SqlCapture implements StatementInspector {
+        private static final ThreadLocal<List<String>> STATEMENTS = ThreadLocal.withInitial(ArrayList::new);
+
+        @Override
+        public String inspect(String sql) {
+            STATEMENTS.get().add(sql.toLowerCase(Locale.ROOT));
+            return sql;
+        }
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "backend", "missing"})
+    @DisplayName("개수 쿼리는 카테고리 필터가 있을 때만 조인하고 정확한 전체 개수를 반환한다.")
+    void test_count_published_posts_joins_category_only_when_filtered(String categorySlug) {
+        Category backend = categoryRepository.save(new Category("Backend", "backend"));
+        Category frontend = categoryRepository.save(new Category("Frontend", "frontend"));
+        postRepository.save(Post.publish("backend 1", "summary", "content", backend));
+        postRepository.save(Post.publish("backend 2", "summary", "content", backend));
+        postRepository.save(Post.publish("frontend", "summary", "content", frontend));
+        postRepository.save(Post.createDraft("draft", "summary", "content", null));
+        postRepository.flush();
+        SqlCapture.STATEMENTS.get().clear();
+
+        try {
+            PostSearchCondition condition = new PostSearchCondition(categorySlug, List.of(), null);
+            Page<PostSummaryDto> result = postRepository.findPublishedPosts(condition, PageRequest.of(0, 1));
+            long expectedTotal = !condition.hasCategory() ? 3 : "backend".equals(categorySlug) ? 2 : 0;
+
+            assertThat(result.getTotalElements()).isEqualTo(expectedTotal);
+            assertThat(result.getContent()).hasSize(expectedTotal == 0 ? 0 : 1);
+            assertThat(result.hasNext()).isEqualTo(expectedTotal > 1);
+            if (expectedTotal > 0) {
+                assertThat(result.getContent().getFirst().categoryName()).isNotBlank();
+            }
+
+            List<String> countStatements = SqlCapture.STATEMENTS.get().stream()
+                .filter(sql -> sql.contains("select count("))
+                .toList();
+            assertThat(countStatements).hasSize(1);
+            if (condition.hasCategory()) {
+                assertThat(countStatements.getFirst()).contains("join categories");
+            } else {
+                assertThat(countStatements.getFirst()).doesNotContain("join categories");
+            }
+        } finally {
+            SqlCapture.STATEMENTS.remove();
+        }
+    }
 
     @Test
     @DisplayName("공개 게시글만 최신순으로 조회한다.")
