@@ -12,6 +12,57 @@ public class HtmlSanitizerUtilTest {
     private final HtmlSanitizerUtil htmlSanitizerUtil = new HtmlSanitizerUtil();
 
     @Test
+    @DisplayName("빈 수식 요소와 인라인 및 블록 LaTeX 데이터를 유지한다.")
+    void test_sanitize_allow_math_data() {
+        String html = """
+              <p>수식: <span data-type="inline-math" data-latex="a \\times b"></span></p>
+              <div data-type="block-math" data-latex="\\frac{a}{b}"></div>
+              """;
+
+        assertThat(htmlSanitizerUtil.sanitize(html)).isEqualTo(html);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "block-math", "unknown", "INLINE-MATH", "inline-math block-math"})
+    @DisplayName("span의 data-type은 inline-math만 허용한다.")
+    void test_sanitize_remove_invalid_inline_math_type(String type) {
+        String html = "<span data-type=\"" + type + "\" data-latex=\"x\"></span>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<span data-latex=\"x\"></span>");
+    }
+
+    @Test
+    @DisplayName("수식 속성은 지정된 태그에만 허용한다.")
+    void test_sanitize_restrict_math_attributes_to_elements() {
+        String html = "<p data-type=\"inline-math\" data-latex=\"x\">본문</p>"
+            + "<details data-type=\"toggle\" data-latex=\"x\"><summary>제목</summary></details>";
+
+        assertThat(htmlSanitizerUtil.sanitize(html))
+            .isEqualTo("<p>본문</p><details data-type=\"toggle\"><summary>제목</summary></details>");
+    }
+
+    @Test
+    @DisplayName("수식 데이터의 특수문자는 속성 안에 보존하고 HTML 이벤트는 제거한다.")
+    void test_sanitize_math_data_with_special_characters_and_xss() {
+        String html = """
+              <span data-type="inline-math" data-latex="x &lt; y &amp; \\text{&quot;값&quot;}" onclick="alert(1)"></span>
+              <div data-type="block-math" data-latex="\\frac{a}{b}" style="color: red">
+                <script>alert(1)</script>
+                <img src="/api/post-images/1" onerror="alert(1)">
+              </div>
+              """;
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result)
+            .contains("data-type=\"inline-math\"", "data-type=\"block-math\"",
+                "data-latex=\"x &lt; y &amp; \\text{", "data-latex=\"\\frac{a}{b}\"")
+            .doesNotContain("onclick", "onerror", "style=", "<script", "alert(");
+        assertThat(htmlSanitizerUtil.sanitize(result)).isEqualTo(result);
+    }
+
+    @Test
     @DisplayName("허용된 HTML 태그는 유지한다.")
     void test_sanitize_allowed_html_success() {
         String html = """
