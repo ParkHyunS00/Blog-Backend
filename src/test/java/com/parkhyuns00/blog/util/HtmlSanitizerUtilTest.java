@@ -23,6 +23,22 @@ public class HtmlSanitizerUtilTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"span", "div"})
+    @DisplayName("빈 수식 요소의 LaTeX 특수문자를 보존하고 앰퍼샌드는 HTML 이스케이프한다.")
+    void test_sanitize_preserve_latex_characters(String tag) {
+        String type = "span".equals(tag) ? "inline-math" : "block-math";
+        String latex = "\\begin{aligned}a_{1}^{2} & b \\\\ c & \\frac{x}{y}\\end{aligned}";
+        String html = "<" + tag + " data-type=\"" + type + "\" data-latex=\"" + latex + "\"></" + tag + ">";
+        String expected = "<" + tag + " data-type=\"" + type + "\" data-latex=\""
+            + latex.replace("&", "&amp;") + "\"></" + tag + ">";
+
+        String result = htmlSanitizerUtil.sanitize(html);
+
+        assertThat(result).isEqualTo(expected);
+        assertThat(htmlSanitizerUtil.sanitize(result)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"", "block-math", "unknown", "INLINE-MATH", "inline-math block-math"})
     @DisplayName("span의 data-type은 inline-math만 허용한다.")
     void test_sanitize_remove_invalid_inline_math_type(String type) {
