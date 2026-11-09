@@ -1458,7 +1458,7 @@ public class PostServiceTest {
     }
 
     @Test
-    @DisplayName("인기 게시글 조회 시 공개 게시글을 최대 3개 요청한다.")
+    @DisplayName("인기 게시글을 최대 3개 요청하고 조회 결과를 반환한다.")
     void test_get_popular_posts_success() {
         LocalDateTime createdAt = LocalDateTime.of(2026, 9, 6, 12, 0);
 
@@ -1473,17 +1473,13 @@ public class PostServiceTest {
             )
         );
 
-        when(postRepository.findPopularPosts(eq(PostStatus.PUBLISHED), any(Limit.class))).thenReturn(expected);
+        when(postRepository.findPopularPosts(3)).thenReturn(expected);
 
         List<PostPopularDto> result = postService.getPopularPosts();
 
         assertThat(result).isEqualTo(expected);
 
-        ArgumentCaptor<Limit> limitCaptor = ArgumentCaptor.forClass(Limit.class);
-
-        verify(postRepository).findPopularPosts(eq(PostStatus.PUBLISHED), limitCaptor.capture());
-
-        assertThat(limitCaptor.getValue().max()).isEqualTo(3);
+        verify(postRepository).findPopularPosts(3);
     }
 
     private PostDetailDto createPostDetail(long viewCount) {
