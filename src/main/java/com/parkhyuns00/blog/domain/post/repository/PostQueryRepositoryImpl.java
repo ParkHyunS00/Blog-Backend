@@ -19,10 +19,12 @@ import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Session;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,7 +46,85 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             );
         }
 
-        List<PostSummaryProjection> summaries = queryFactory
+        List<PostSummaryProjection> summaries = condition.hasCategory() || condition.hasTags()
+            ? findFilteredPublishedPostSummaries(condition, pageable)
+            : findPagedPublishedPostSummaries(pageable);
+
+        JPAQuery<Long> countQuery = queryFactory
+            .select(post.count())
+            .from(post)
+            .where(
+                post.status.eq(PostStatus.PUBLISHED),
+                hasAllTags(condition.tagSlugs())
+            );
+
+        if (condition.hasCategory()) {
+            countQuery.join(post.category, category)
+                .where(categoryEq(condition.categorySlug()));
+        }
+
+        Long total = countQuery.fetchOne();
+
+        long totalElements = total == null ? 0 : total;
+
+        return createSummaryPage(summaries, pageable, totalElements);
+    }
+
+    private List<PostSummaryProjection> findPagedPublishedPostSummaries(Pageable pageable) {
+        String sql = """
+            SELECT
+                p.id AS post_id,
+                p.title,
+                p.summary,
+                pi.id AS thumbnail_image_id,
+                c.name AS category_name,
+                c.slug AS category_slug,
+                p.created_at,
+                p.updated_at
+            FROM (
+                SELECT p2.id
+                FROM posts p2
+                WHERE p2.status = 'PUBLISHED'
+                ORDER BY p2.created_at DESC, p2.id DESC
+                LIMIT :offset, :size
+            ) page
+            JOIN posts p ON p.id = page.id
+            JOIN categories c ON c.id = p.category_id
+            LEFT JOIN post_images pi
+                ON pi.post_id = p.id
+                AND pi.type = 'THUMBNAIL'
+            ORDER BY p.created_at DESC, p.id DESC
+            """;
+
+        return entityManager.unwrap(Session.class)
+            .createNativeQuery(sql, Object[].class)
+            .addScalar("post_id", Long.class)
+            .addScalar("title", String.class)
+            .addScalar("summary", String.class)
+            .addScalar("thumbnail_image_id", Long.class)
+            .addScalar("category_name", String.class)
+            .addScalar("category_slug", String.class)
+            .addScalar("created_at", LocalDateTime.class)
+            .addScalar("updated_at", LocalDateTime.class)
+            .setParameter("offset", pageable.getOffset())
+            .setParameter("size", pageable.getPageSize())
+            .setTupleTransformer((row, _) -> new PostSummaryProjection(
+                (Long) row[0],
+                (String) row[1],
+                (String) row[2],
+                (Long) row[3],
+                (String) row[4],
+                (String) row[5],
+                (LocalDateTime) row[6],
+                (LocalDateTime) row[7]
+            ))
+            .getResultList();
+    }
+
+    private List<PostSummaryProjection> findFilteredPublishedPostSummaries(
+        PostSearchCondition condition, Pageable pageable
+    ) {
+        return queryFactory
             .select(Projections.constructor(
                 PostSummaryProjection.class,
                 post.id,
@@ -72,25 +152,6 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .offset(pageable.getOffset())
             .limit(pageable.getPageSize())
             .fetch();
-
-        JPAQuery<Long> countQuery = queryFactory
-            .select(post.count())
-            .from(post)
-            .where(
-                post.status.eq(PostStatus.PUBLISHED),
-                hasAllTags(condition.tagSlugs())
-            );
-
-        if (condition.hasCategory()) {
-            countQuery.join(post.category, category)
-                .where(categoryEq(condition.categorySlug()));
-        }
-
-        Long total = countQuery.fetchOne();
-
-        long totalElements = total == null ? 0 : total;
-
-        return createSummaryPage(summaries, pageable, totalElements);
     }
 
     @Override
