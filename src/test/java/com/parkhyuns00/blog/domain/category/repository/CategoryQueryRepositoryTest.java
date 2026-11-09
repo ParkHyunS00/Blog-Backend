@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.parkhyuns00.blog.config.jpa.JpaConfig;
 import com.parkhyuns00.blog.config.querydsl.QueryDslConfig;
 import com.parkhyuns00.blog.domain.category.model.Category;
+import com.parkhyuns00.blog.domain.category.repository.dto.CategoryWithPostCountDto;
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryWithLatestPostDto;
 import com.parkhyuns00.blog.domain.post.model.Post;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
@@ -36,6 +37,32 @@ public class CategoryQueryRepositoryTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Test
+    @DisplayName("카테고리 ID로 그룹화하여 공개 게시글 개수를 집계하고 빈 카테고리도 이름순으로 반환한다.")
+    void test_find_all_with_post_count() {
+        Category empty = categoryRepository.save(new Category("Empty", "empty"));
+        Category draftOnly = categoryRepository.save(new Category("Draft", "draft"));
+        Category database = categoryRepository.save(new Category("Database", "database"));
+        Category backend = categoryRepository.save(new Category("Backend", "backend"));
+
+        postRepository.saveAll(List.of(
+            Post.publish("첫 글", "요약", "본문", backend),
+            Post.publish("두 번째 글", "요약", "본문", backend),
+            Post.createDraft("임시 글", "요약", "본문", backend),
+            Post.publish("DB 글", "요약", "본문", database),
+            Post.createDraft("임시 글", "요약", "본문", draftOnly)
+        ));
+
+        List<CategoryWithPostCountDto> result = categoryRepository.findAllWithPostCount(PostStatus.PUBLISHED);
+
+        assertThat(result).containsExactly(
+            new CategoryWithPostCountDto(backend.getId(), "Backend", "backend", 2L),
+            new CategoryWithPostCountDto(database.getId(), "Database", "database", 1L),
+            new CategoryWithPostCountDto(draftOnly.getId(), "Draft", "draft", 0L),
+            new CategoryWithPostCountDto(empty.getId(), "Empty", "empty", 0L)
+        );
+    }
 
     @Test
     @DisplayName("카테고리별 공개 게시글 개수와 최신글을 이름순으로 반환한다.")
