@@ -18,6 +18,7 @@ import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.PostCreateDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostDetailDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostDraftDetailDto;
+import com.parkhyuns00.blog.domain.visitor.service.VisitorService;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import jakarta.servlet.http.Cookie;
@@ -79,6 +80,9 @@ public class AdminSecurityIntegrationTest {
 
     @MockitoBean
     private CategoryService categoryService;
+
+    @MockitoBean
+    private VisitorService visitorService;
 
     @MockitoBean
     private GarageUtil garageUtil;
@@ -371,7 +375,7 @@ public class AdminSecurityIntegrationTest {
     @DisplayName("모든 사용자는 공개 게시글 상세 정보를 조회할 수 있다.")
     void test_unauthenticated_user_can_get_published_post() throws Exception {
         UUID visitorId = UUID.randomUUID();
-        Cookie visitorCookie = new Cookie("BLOG_VISITOR_ID", visitorId.toString());
+        Cookie visitorCookie = new Cookie("POST_VIEWER_ID", visitorId.toString());
         LocalDateTime now = LocalDateTime.now();
         when(postService.getPublishedPost(1L, visitorId))
             .thenReturn(new PostDetailDto(
@@ -845,7 +849,7 @@ public class AdminSecurityIntegrationTest {
         String setCookie = result.getResponse().getHeader(HttpHeaders.SET_COOKIE);
 
         assertThat(setCookie).contains(
-            "BLOG_VISITOR_ID=" + issuedVisitorId,
+            "POST_VIEWER_ID=" + issuedVisitorId,
             "Max-Age=31536000",
             "Path=/",
             "HttpOnly",
@@ -880,6 +884,69 @@ public class AdminSecurityIntegrationTest {
             .andExpect(jsonPath("$.data").isEmpty());
 
         verify(postService).getPopularPosts();
+    }
+
+    @Test
+    @DisplayName("방문자는 CSRF 토큰으로 방문을 기록하고 방문자 쿠키를 발급받는다.")
+    void test_unauthenticated_user_can_record_visit_when_cookie_missing() throws Exception {
+        CsrfTokenFixture csrf = issueCsrfToken();
+
+        MvcResult result = mockMvc.perform(post("/api/visitors")
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(cookie().exists("VISITOR_ID"))
+            .andExpect(cookie().httpOnly("VISITOR_ID", true))
+            .andExpect(cookie().path("VISITOR_ID", "/"))
+            .andExpect(cookie().maxAge("VISITOR_ID", 31536000))
+            .andReturn();
+
+        Cookie visitorCookie = result.getResponse().getCookie("VISITOR_ID");
+
+        assertThat(visitorCookie).isNotNull();
+
+        UUID issuedVisitorId = UUID.fromString(visitorCookie.getValue());
+
+        verify(visitorService).recordVisit(issuedVisitorId);
+    }
+
+    @Test
+    @DisplayName("익명 사용자의 기존 방문자 쿠키를 재사용하여 방문을 기록한다.")
+    void test_unauthenticated_user_can_record_visit_with_existing_cookie() throws Exception {
+        CsrfTokenFixture csrf = issueCsrfToken();
+        UUID visitorId = UUID.randomUUID();
+        Cookie visitorCookie = new Cookie("VISITOR_ID", visitorId.toString());
+
+        mockMvc.perform(post("/api/visitors")
+                .cookie(csrf.cookie(), visitorCookie)
+                .header("X-XSRF-TOKEN", csrf.token()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(cookie().doesNotExist("VISITOR_ID"));
+
+        verify(visitorService).recordVisit(visitorId);
+    }
+
+    @Test
+    @DisplayName("CSRF 토큰 없이 방문 기록을 요청하면 거부된다.")
+    void test_record_visit_fail_when_csrf_missing() throws Exception {
+        mockMvc.perform(post("/api/visitors")).andExpect(status().isForbidden());
+
+        verifyNoInteractions(visitorService);
+    }
+
+    @Test
+    @DisplayName("잘못된 CSRF 토큰으로 방문 기록을 요청하면 거부된다.")
+    void test_record_visit_fail_when_csrf_invalid() throws Exception {
+        CsrfTokenFixture csrf = issueCsrfToken();
+
+        mockMvc.perform(post("/api/visitors")
+                .cookie(csrf.cookie())
+                .header("X-XSRF-TOKEN", "invalid-csrf-token"))
+            .andExpect(status().isForbidden());
+
+        verifyNoInteractions(visitorService);
     }
 
     private MockHttpSession adminKeyLogin() throws Exception {

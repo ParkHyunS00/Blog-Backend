@@ -97,6 +97,8 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/api/post-images/*").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/categories", "/api/categories/latest-posts").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/tags").permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/visitors").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/visitors").permitAll()
 
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/logout").hasRole(AdminRole.ADMIN.name())
             .requestMatchers(HttpMethod.POST, "/api/admin/auth/otp").hasRole(AdminRole.PRE_ADMIN.name())

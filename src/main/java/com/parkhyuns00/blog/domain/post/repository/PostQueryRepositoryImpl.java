@@ -15,6 +15,7 @@ import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.JPAExpressions;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -72,16 +73,20 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .limit(pageable.getPageSize())
             .fetch();
 
-        Long total = queryFactory
+        JPAQuery<Long> countQuery = queryFactory
             .select(post.count())
             .from(post)
-            .join(post.category, category)
             .where(
                 post.status.eq(PostStatus.PUBLISHED),
-                categoryEq(condition.categorySlug()),
                 hasAllTags(condition.tagSlugs())
-            )
-            .fetchOne();
+            );
+
+        if (condition.hasCategory()) {
+            countQuery.join(post.category, category)
+                .where(categoryEq(condition.categorySlug()));
+        }
+
+        Long total = countQuery.fetchOne();
 
         long totalElements = total == null ? 0 : total;
 
