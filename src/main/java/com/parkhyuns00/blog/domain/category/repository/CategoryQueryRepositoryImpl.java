@@ -18,7 +18,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public class CategoryQueryRepositoryImpl implements CategoryQueryRepository{
+public class CategoryQueryRepositoryImpl implements CategoryQueryRepository {
 
     private final JPAQueryFactory queryFactory;
 
@@ -42,42 +42,46 @@ public class CategoryQueryRepositoryImpl implements CategoryQueryRepository{
 
         if (categories.isEmpty()) return List.of();
 
-        QPost newerPost = new QPost("newerPost");
+        QPost latestPost = new QPost("latestPost");
 
         List<Tuple> latestPosts = queryFactory
             .select(
-                post.category.id,
+                category.id,
                 post.id,
                 post.title,
                 post.summary,
                 post.createdAt
             )
-            .from(post)
-            .where(
-                post.status.eq(status),
+            .from(category)
+            .join(post).on(post.id.eq(
                 JPAExpressions
-                    .selectOne()
-                    .from(newerPost)
+                    .select(latestPost.id)
+                    .from(latestPost)
                     .where(
-                        newerPost.category.eq(post.category),
-                        newerPost.status.eq(status),
-                        newerPost.createdAt.gt(post.createdAt)
-                            .or(newerPost.createdAt.eq(post.createdAt).and(newerPost.id.gt(post.id)))
+                        latestPost.category.eq(category),
+                        latestPost.status.eq(status)
                     )
-                    .notExists()
-            )
+                    .orderBy(
+                        latestPost.category.id.desc(),
+                        latestPost.status.desc(),
+                        latestPost.createdAt.desc(),
+                        latestPost.id.desc()
+                    )
+                    .limit(1)
+            ))
+            .orderBy(category.name.asc(), category.id.asc())
             .fetch();
 
         Map<Long, Tuple> latestPostByCategoryId = latestPosts.stream()
             .collect(Collectors.toMap(
-                row -> row.get(post.category.id),
+                row -> row.get(category.id),
                 Function.identity()
             ));
 
         return categories.stream()
             .map(row -> {
                 Long categoryId = row.get(category.id);
-                Tuple latestPost = latestPostByCategoryId.get(categoryId);
+                Tuple latestPostRow = latestPostByCategoryId.get(categoryId);
 
                 return new CategoryWithLatestPostDto(
                     categoryId,
@@ -85,10 +89,10 @@ public class CategoryQueryRepositoryImpl implements CategoryQueryRepository{
                     row.get(category.slug),
                     row.get(post.id.count()),
                     new CategoryLatestPostDto(
-                        latestPost.get(post.id),
-                        latestPost.get(post.title),
-                        latestPost.get(post.summary),
-                        latestPost.get(post.createdAt)
+                        latestPostRow.get(post.id),
+                        latestPostRow.get(post.title),
+                        latestPostRow.get(post.summary),
+                        latestPostRow.get(post.createdAt)
                     )
                 );
             })
