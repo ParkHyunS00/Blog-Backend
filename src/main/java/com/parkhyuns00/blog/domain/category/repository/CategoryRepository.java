@@ -30,7 +30,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long>, Categ
         )
         from Category c
         left join Post p on p.category = c and p.status = :status
-        group by c.id, c.name, c.slug
+        group by c.id
         order by c.name asc
     """)
     List<CategoryWithPostCountDto> findAllWithPostCount(PostStatus status);
