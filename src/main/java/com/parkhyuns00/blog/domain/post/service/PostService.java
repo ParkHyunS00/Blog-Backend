@@ -19,7 +19,6 @@ import com.parkhyuns00.blog.domain.tag.service.TagService;
 import com.parkhyuns00.blog.util.HtmlSanitizerUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -220,7 +219,7 @@ public class PostService {
     }
 
     public List<PostPopularDto> getPopularPosts() {
-        return postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(POPULAR_POST_LIMIT));
+        return postRepository.findPopularPosts(POPULAR_POST_LIMIT);
     }
 
     private void deletePost(Long postId, PostStatus requiredStatus) {

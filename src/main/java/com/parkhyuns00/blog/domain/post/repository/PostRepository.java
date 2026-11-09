@@ -3,7 +3,6 @@ package com.parkhyuns00.blog.domain.post.repository;
 import com.parkhyuns00.blog.domain.post.model.Post;
 import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.dto.PostPopularDto;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,19 +21,24 @@ public interface PostRepository extends JpaRepository<Post, Long>, PostQueryRepo
     @Query("update Post p set p.viewCount = p.viewCount + 1 where p.id = :postId")
     int incrementViewCount(@Param("postId") Long postId);
 
-    @Query("""
-        select new com.parkhyuns00.blog.domain.post.service.dto.PostPopularDto(
+    @Query(value = """
+        SELECT
             p.id,
             p.title,
             c.name,
             c.slug,
-            p.createdAt,
-            p.viewCount
-        )
-        from Post p
-        join p.category c
-        where p.status = :status
-        order by p.viewCount desc, p.createdAt desc, p.id desc
-    """)
-    List<PostPopularDto> findPopularPosts(@Param("status") PostStatus status, Limit limit);
+            p.created_at,
+            p.view_count
+        FROM (
+            SELECT p2.id
+            FROM posts p2
+            WHERE p2.view_count > 0
+            ORDER BY p2.view_count DESC, p2.created_at DESC, p2.id DESC
+            LIMIT :limit
+        ) top_posts
+        JOIN posts p ON p.id = top_posts.id
+        JOIN categories c ON c.id = p.category_id
+        ORDER BY p.view_count DESC, p.created_at DESC, p.id DESC
+        """, nativeQuery = true)
+    List<PostPopularDto> findPopularPosts(@Param("limit") int limit);
 }
