@@ -431,7 +431,10 @@ public class PostServiceTest {
 
         Post savedPost = postCaptor.getValue();
 
-        assertThat(savedPost.getContent())
+        assertThat(savedPost.getTitle()).isNull();
+        assertThat(savedPost.getContent()).isNull();
+        assertThat(savedPost.getPublishedTitle()).isEqualTo("title");
+        assertThat(savedPost.getPublishedContent())
             .contains("<p>정상 본문</p>")
             .contains("class=\"language-java\"")
             .doesNotContain("<script")
@@ -551,9 +554,11 @@ public class PostServiceTest {
         assertThat(result.postId()).isEqualTo(10L);
         assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
 
-        assertThat(savedPost.getTitle()).isEmpty();
+        assertThat(savedPost.getTitle()).isNull();
         assertThat(savedPost.getSummary()).isEmpty();
-        assertThat(savedPost.getContent()).isEmpty();
+        assertThat(savedPost.getContent()).isNull();
+        assertThat(savedPost.getPublishedTitle()).isNull();
+        assertThat(savedPost.getPublishedContent()).isNull();
         assertThat(savedPost.getCategory()).isNull();
 
         verifyNoInteractions(categoryService);
@@ -613,6 +618,8 @@ public class PostServiceTest {
         assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
 
         assertThat(savedDraft.getTitle()).isEqualTo("draft title");
+        assertThat(savedDraft.getPublishedTitle()).isNull();
+        assertThat(savedDraft.getPublishedContent()).isNull();
         assertThat(savedDraft.getSummary()).isEqualTo("draft summary");
         assertThat(savedDraft.getContent())
             .contains("<p>초안 본문</p>")
@@ -681,6 +688,8 @@ public class PostServiceTest {
 
         assertThat(result.status()).isEqualTo(PostStatus.DRAFT);
         assertThat(draft.getTitle()).isEqualTo("new title");
+        assertThat(draft.getPublishedTitle()).isNull();
+        assertThat(draft.getPublishedContent()).isNull();
         assertThat(draft.getSummary()).isEqualTo("new summary");
         assertThat(draft.getContent())
             .contains("<p>new content</p>")
@@ -1051,9 +1060,11 @@ public class PostServiceTest {
 
         assertThat(result.postId()).isEqualTo(postId);
         assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
-        assertThat(draft.getTitle()).isEqualTo("최종 제목");
+        assertThat(draft.getTitle()).isNull();
         assertThat(draft.getSummary()).isEqualTo("최종 요약");
-        assertThat(draft.getContent()).isEqualTo("<p>최종 본문</p>");
+        assertThat(draft.getContent()).isNull();
+        assertThat(draft.getPublishedTitle()).isEqualTo("최종 제목");
+        assertThat(draft.getPublishedContent()).isEqualTo("<p>최종 본문</p>");
         assertThat(draft.getCategory()).isSameAs(newCategory);
         assertThat(draft.getStatus()).isEqualTo(PostStatus.PUBLISHED);
 
@@ -1172,9 +1183,11 @@ public class PostServiceTest {
         assertThat(result.postId()).isEqualTo(postId);
         assertThat(result.status()).isEqualTo(PostStatus.PUBLISHED);
 
-        assertThat(post.getTitle()).isEqualTo("수정 제목");
+        assertThat(post.getTitle()).isNull();
         assertThat(post.getSummary()).isEqualTo("수정 요약");
-        assertThat(post.getContent()).isEqualTo("<p>수정 본문</p>");
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("수정 제목");
+        assertThat(post.getPublishedContent()).isEqualTo("<p>수정 본문</p>");
         assertThat(post.getCategory()).isSameAs(newCategory);
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
 

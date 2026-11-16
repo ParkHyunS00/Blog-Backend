@@ -21,6 +21,8 @@ public class PostTest {
         assertThat(post.getTitle()).isEqualTo("title");
         assertThat(post.getSummary()).isEqualTo("summary");
         assertThat(post.getContent()).isEqualTo("content");
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
         assertThat(post.getCategory()).isSameAs(category);
         assertThat(post.getViewCount()).isZero();
@@ -33,9 +35,11 @@ public class PostTest {
 
         Post post = Post.publish("title", "summary", "content", category);
 
-        assertThat(post.getTitle()).isEqualTo("title");
+        assertThat(post.getTitle()).isNull();
         assertThat(post.getSummary()).isEqualTo("summary");
-        assertThat(post.getContent()).isEqualTo("content");
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("title");
+        assertThat(post.getPublishedContent()).isEqualTo("content");
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
         assertThat(post.getCategory()).isSameAs(category);
         assertThat(post.getViewCount()).isZero();
@@ -161,6 +165,10 @@ public class PostTest {
         post.publish();
 
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(post.getTitle()).isNull();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("title");
+        assertThat(post.getPublishedContent()).isEqualTo("content");
     }
 
     @Test
@@ -172,6 +180,10 @@ public class PostTest {
         post.publish();
 
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(post.getTitle()).isNull();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("title");
+        assertThat(post.getPublishedContent()).isEqualTo("content");
     }
 
     @Test
@@ -180,10 +192,24 @@ public class PostTest {
         Category category = new Category("Spring", "spring");
         Post post = Post.createDraft(null, null, null, category);
 
-        assertThat(post.getTitle()).isEmpty();
+        assertThat(post.getTitle()).isNull();
         assertThat(post.getSummary()).isEmpty();
-        assertThat(post.getContent()).isEmpty();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+    }
+
+    @Test
+    @DisplayName("초안의 빈 제목과 본문은 null로 저장한다.")
+    void test_create_draft_with_blank_title_and_content() {
+        Post post = Post.createDraft("  ", "  ", "\n\t", null);
+
+        assertThat(post.getTitle()).isNull();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getSummary()).isEmpty();
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
     }
 
     @Test
@@ -211,6 +237,8 @@ public class PostTest {
             .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
 
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
     }
 
     @Test
@@ -226,6 +254,8 @@ public class PostTest {
         assertThat(post.getTitle()).isEqualTo("new title");
         assertThat(post.getSummary()).isEqualTo("new summary");
         assertThat(post.getContent()).isEqualTo("new content");
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
         assertThat(post.getCategory()).isSameAs(newCategory);
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
     }
@@ -239,9 +269,11 @@ public class PostTest {
 
         post.updateDraft(null, null, null, null);
 
-        assertThat(post.getTitle()).isEmpty();
+        assertThat(post.getTitle()).isNull();
         assertThat(post.getSummary()).isEmpty();
-        assertThat(post.getContent()).isEmpty();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
         assertThat(post.getCategory()).isNull();
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
     }
@@ -263,7 +295,10 @@ public class PostTest {
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_STATUS);
 
-        assertThat(post.getTitle()).isEqualTo("title");
+        assertThat(post.getTitle()).isNull();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("title");
+        assertThat(post.getPublishedContent()).isEqualTo("content");
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
     }
 
@@ -293,9 +328,11 @@ public class PostTest {
 
         post.updatePublished(" new title ", " new summary ", "new content", newCategory);
 
-        assertThat(post.getTitle()).isEqualTo("new title");
+        assertThat(post.getTitle()).isNull();
         assertThat(post.getSummary()).isEqualTo("new summary");
-        assertThat(post.getContent()).isEqualTo("new content");
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("new title");
+        assertThat(post.getPublishedContent()).isEqualTo("new content");
         assertThat(post.getCategory()).isSameAs(newCategory);
         assertThat(post.getStatus()).isEqualTo(PostStatus.PUBLISHED);
     }
@@ -319,6 +356,8 @@ public class PostTest {
         assertThat(post.getTitle()).isEqualTo("draft title");
         assertThat(post.getSummary()).isEqualTo("draft summary");
         assertThat(post.getContent()).isEqualTo("draft content");
+        assertThat(post.getPublishedTitle()).isNull();
+        assertThat(post.getPublishedContent()).isNull();
         assertThat(post.getCategory()).isSameAs(category);
         assertThat(post.getStatus()).isEqualTo(PostStatus.DRAFT);
     }
@@ -339,6 +378,9 @@ public class PostTest {
             .extracting("exceptionCode")
             .isEqualTo(PostExceptionCode.INVALID_POST_TITLE);
 
-        assertThat(post.getTitle()).isEqualTo("title");
+        assertThat(post.getTitle()).isNull();
+        assertThat(post.getContent()).isNull();
+        assertThat(post.getPublishedTitle()).isEqualTo("title");
+        assertThat(post.getPublishedContent()).isEqualTo("content");
     }
 }

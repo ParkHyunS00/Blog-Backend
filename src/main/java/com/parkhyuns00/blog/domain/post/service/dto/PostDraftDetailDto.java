@@ -19,6 +19,8 @@ public record PostDraftDetailDto(
     LocalDateTime updatedAt
 ) {
     public PostDraftDetailDto {
+        title = title == null ? "" : title;
+        content = content == null ? "" : content;
         tags = tags == null ? List.of() : List.copyOf(tags);
         contentImageIds = contentImageIds == null ? List.of() : List.copyOf(contentImageIds);
     }

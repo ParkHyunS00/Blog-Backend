@@ -14,6 +14,7 @@ public record PostDraftSummaryDto(
     LocalDateTime updatedAt
 ) {
     public PostDraftSummaryDto {
+        title = title == null ? "" : title;
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 }
