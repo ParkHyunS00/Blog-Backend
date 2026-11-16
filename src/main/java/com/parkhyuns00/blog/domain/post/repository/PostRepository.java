@@ -24,7 +24,7 @@ public interface PostRepository extends JpaRepository<Post, Long>, PostQueryRepo
     @Query(value = """
         SELECT
             p.id,
-            p.title,
+            p.published_title AS title,
             c.name,
             c.slug,
             p.created_at,

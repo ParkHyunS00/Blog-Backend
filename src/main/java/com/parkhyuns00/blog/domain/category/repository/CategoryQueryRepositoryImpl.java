@@ -48,7 +48,7 @@ public class CategoryQueryRepositoryImpl implements CategoryQueryRepository {
             .select(
                 category.id,
                 post.id,
-                post.title,
+                post.publishedTitle,
                 post.summary,
                 post.createdAt
             )
@@ -90,7 +90,7 @@ public class CategoryQueryRepositoryImpl implements CategoryQueryRepository {
                     row.get(post.id.count()),
                     new CategoryLatestPostDto(
                         latestPostRow.get(post.id),
-                        latestPostRow.get(post.title),
+                        latestPostRow.get(post.publishedTitle),
                         latestPostRow.get(post.summary),
                         latestPostRow.get(post.createdAt)
                     )

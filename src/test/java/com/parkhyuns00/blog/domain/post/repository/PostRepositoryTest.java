@@ -55,7 +55,7 @@ public class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("게시글 상태와 관계없이 조회수가 높은 게시글을 최대 3개 반환한다.")
+    @DisplayName("조회수가 양수인 게시글 중 조회수가 높은 게시글을 최대 3개 반환한다.")
     void test_find_popular_posts_success() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
 
@@ -69,7 +69,6 @@ public class PostRepositoryTest {
         ReflectionTestUtils.setField(second, "viewCount", 40L);
         ReflectionTestUtils.setField(third, "viewCount", 20L);
         ReflectionTestUtils.setField(fourth, "viewCount", 30L);
-        ReflectionTestUtils.setField(draft, "viewCount", 100L);
 
         postRepository.saveAllAndFlush(List.of(first, second, third, fourth, draft));
 
@@ -77,15 +76,15 @@ public class PostRepositoryTest {
 
         assertThat(result)
             .extracting(PostPopularDto::postId)
-            .containsExactly(draft.getId(), second.getId(), fourth.getId());
+            .containsExactly(second.getId(), fourth.getId(), third.getId());
 
         assertThat(result)
             .extracting(PostPopularDto::viewCount)
-            .containsExactly(100L, 40L, 30L);
+            .containsExactly(40L, 30L, 20L);
 
         PostPopularDto popularPost = result.getFirst();
 
-        assertThat(popularPost.title()).isEqualTo("임시저장");
+        assertThat(popularPost.title()).isEqualTo("두번째");
         assertThat(popularPost.categoryName()).isEqualTo("Backend");
         assertThat(popularPost.categorySlug()).isEqualTo("backend");
         assertThat(popularPost.createdAt()).isNotNull();
@@ -167,15 +166,14 @@ public class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("상위 3개 ID를 먼저 선택한 후 카테고리가 없는 글은 조인에서 제외한다.")
-    void test_find_popular_posts_limits_before_category_join() {
+    @DisplayName("조회수가 0인 카테고리 없는 초안은 인기글 수에 영향을 주지 않는다.")
+    void test_find_popular_posts_excludes_unviewed_draft() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
         Post uncategorized = Post.createDraft("카테고리 없는 글", "요약", "본문", null);
         Post first = Post.publish("첫 번째", "요약", "본문", category);
         Post second = Post.publish("두 번째", "요약", "본문", category);
         Post third = Post.publish("세 번째", "요약", "본문", category);
 
-        ReflectionTestUtils.setField(uncategorized, "viewCount", 100L);
         ReflectionTestUtils.setField(first, "viewCount", 30L);
         ReflectionTestUtils.setField(second, "viewCount", 20L);
         ReflectionTestUtils.setField(third, "viewCount", 10L);
@@ -183,7 +181,7 @@ public class PostRepositoryTest {
 
         assertThat(postRepository.findPopularPosts(3))
             .extracting(PostPopularDto::postId)
-            .containsExactly(first.getId(), second.getId());
+            .containsExactly(first.getId(), second.getId(), third.getId());
     }
 
     private void updateCreatedAt(Long postId, LocalDateTime createdAt) {
