@@ -286,6 +286,7 @@ public class PostQueryRepositoryTest {
         assertThat(result.getContent())
             .extracting(PostSummaryDto::postId)
             .containsExactly(backendPost.getId());
+        assertThat(result.getContent().getFirst().title()).isEqualTo("backend post");
     }
 
     @Test
