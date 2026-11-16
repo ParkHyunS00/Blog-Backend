@@ -22,14 +22,20 @@ public class Post extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 200)
+    @Column(length = 200)
     private String title;
 
     @Column(nullable = false, length = 500)
     private String summary;
 
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
+
+    @Column(name = "published_title", length = 200)
+    private String publishedTitle;
+
+    @Column(name = "published_content", columnDefinition = "LONGTEXT")
+    private String publishedContent;
 
     @Column(name = "view_count", nullable = false)
     private long viewCount = 0L;
@@ -43,9 +49,14 @@ public class Post extends BaseEntity {
     private Category category;
 
     private Post(String title, String summary, String content, PostStatus status, Category category) {
-        this.title = title.trim();
+        if (status == PostStatus.PUBLISHED) {
+            this.publishedTitle = title.trim();
+            this.publishedContent = content;
+        } else {
+            this.title = title;
+            this.content = content;
+        }
         this.summary = summary.trim();
-        this.content = content;
         this.status = status;
         this.category = category;
     }
@@ -55,7 +66,7 @@ public class Post extends BaseEntity {
 
         return new Post(
             normalizeDraftValue(title),
-            normalizeDraftValue(summary),
+            normalizeDraftSummary(summary),
             normalizeDraftValue(content),
             PostStatus.DRAFT,
             category
@@ -76,6 +87,10 @@ public class Post extends BaseEntity {
     }
 
     private static String normalizeDraftValue(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String normalizeDraftSummary(String value) {
         return value == null ? "" : value.trim();
     }
 
@@ -84,6 +99,10 @@ public class Post extends BaseEntity {
 
         validateForPublish(title, summary, content, category);
 
+        this.publishedTitle = title;
+        this.publishedContent = content;
+        this.title = null;
+        this.content = null;
         this.status = PostStatus.PUBLISHED;
     }
 
@@ -93,7 +112,7 @@ public class Post extends BaseEntity {
         validateDraftLength(title, summary);
 
         this.title = normalizeDraftValue(title);
-        this.summary = normalizeDraftValue(summary);
+        this.summary = normalizeDraftSummary(summary);
         this.content = normalizeDraftValue(content);
         this.category = category;
     }
@@ -103,9 +122,9 @@ public class Post extends BaseEntity {
 
         validateForPublish(title, summary, content, category);
 
-        this.title = title.trim();
+        this.publishedTitle = title.trim();
         this.summary = summary.trim();
-        this.content = content;
+        this.publishedContent = content;
         this.category = category;
     }
 

@@ -14,6 +14,7 @@ import com.parkhyuns00.blog.domain.post.service.dto.*;
 import com.parkhyuns00.blog.domain.tag.model.Tag;
 import com.parkhyuns00.blog.domain.tag.repository.TagRepository;
 import com.parkhyuns00.blog.domain.tag.service.dto.TagDto;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -55,6 +57,9 @@ public class PostQueryRepositoryTest {
 
     @Autowired
     private PostTagRepository postTagRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     public static class SqlCapture implements StatementInspector {
         private static final ThreadLocal<List<String>> STATEMENTS = ThreadLocal.withInitial(ArrayList::new);
@@ -201,28 +206,65 @@ public class PostQueryRepositoryTest {
     }
 
     @Test
-    @DisplayName("게시글 목록을 페이지 단위로 조회한다.")
+    @DisplayName("필터 없는 목록은 ID를 먼저 페이징하고 작성일이 같으면 ID 내림차순으로 반환한다.")
     void test_find_published_posts_with_pagination_success() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
+        List<Long> postIds = new ArrayList<>();
 
         for (int index = 1; index <= 5; index++) {
-            postRepository.save(Post.publish("title " + index, "summary " + index, "content " + index, category));
+            Post savedPost = postRepository.save(
+                Post.publish("title " + index, "summary " + index, "content " + index, category)
+            );
+            postIds.add(savedPost.getId());
         }
+        postRepository.save(Post.createDraft("draft", "summary", "content", null));
+        entityManager.createQuery("update Post p set p.createdAt = :createdAt")
+            .setParameter("createdAt", LocalDateTime.of(2026, 9, 1, 12, 0))
+            .executeUpdate();
+        entityManager.clear();
 
         PostSearchCondition condition = new PostSearchCondition(null, List.of(), null);
+        SqlCapture.STATEMENTS.get().clear();
 
-        Page<PostSummaryDto> result = postRepository.findPublishedPosts(
-            condition,
-            PageRequest.of(1, 2)
-        );
+        try {
+            Page<PostSummaryDto> result = postRepository.findPublishedPosts(condition, PageRequest.of(1, 2));
 
-        assertThat(result.getContent()).hasSize(2);
-        assertThat(result.getNumber()).isEqualTo(1);
-        assertThat(result.getSize()).isEqualTo(2);
-        assertThat(result.getTotalElements()).isEqualTo(5);
-        assertThat(result.getTotalPages()).isEqualTo(3);
-        assertThat(result.hasNext()).isTrue();
-        assertThat(result.hasPrevious()).isTrue();
+            assertThat(result.getContent()).extracting(PostSummaryDto::postId)
+                .containsExactly(postIds.get(2), postIds.get(1));
+            assertThat(result.getNumber()).isEqualTo(1);
+            assertThat(result.getSize()).isEqualTo(2);
+            assertThat(result.getTotalElements()).isEqualTo(5);
+            assertThat(result.getTotalPages()).isEqualTo(3);
+            assertThat(result.hasNext()).isTrue();
+            assertThat(result.hasPrevious()).isTrue();
+
+            List<String> statements = SqlCapture.STATEMENTS.get();
+            assertThat(statements).hasSize(3);
+            assertThat(statements.getFirst().replaceAll("\\s+", " "))
+                .contains("from ( select p2.id", "limit ?, ? ) page join posts");
+        } finally {
+            SqlCapture.STATEMENTS.remove();
+        }
+    }
+
+    @Test
+    @DisplayName("범위를 벗어난 일반 목록 페이지는 전체 개수를 유지하고 태그 조회를 생략한다.")
+    void test_find_published_posts_with_out_of_range_page() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+        postRepository.saveAndFlush(Post.publish("title", "summary", "content", category));
+        SqlCapture.STATEMENTS.get().clear();
+
+        try {
+            Page<PostSummaryDto> result = postRepository.findPublishedPosts(
+                new PostSearchCondition(null, List.of(), null), PageRequest.of(10000, 5)
+            );
+
+            assertThat(result.getContent()).isEmpty();
+            assertThat(result.getTotalElements()).isEqualTo(1);
+            assertThat(SqlCapture.STATEMENTS.get()).hasSize(2);
+        } finally {
+            SqlCapture.STATEMENTS.remove();
+        }
     }
 
     @Test
@@ -244,6 +286,7 @@ public class PostQueryRepositoryTest {
         assertThat(result.getContent())
             .extracting(PostSummaryDto::postId)
             .containsExactly(backendPost.getId());
+        assertThat(result.getContent().getFirst().title()).isEqualTo("backend post");
     }
 
     @Test

@@ -7,7 +7,6 @@ import com.parkhyuns00.blog.config.querydsl.QueryDslConfig;
 import com.parkhyuns00.blog.domain.category.model.Category;
 import com.parkhyuns00.blog.domain.category.repository.CategoryRepository;
 import com.parkhyuns00.blog.domain.post.model.Post;
-import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.service.dto.PostPopularDto;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
@@ -15,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.Limit;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -57,7 +55,7 @@ public class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("조회수가 높은 공개 게시글을 최대 3개 반환한다.")
+    @DisplayName("조회수가 양수인 게시글 중 조회수가 높은 게시글을 최대 3개 반환한다.")
     void test_find_popular_posts_success() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
 
@@ -71,11 +69,10 @@ public class PostRepositoryTest {
         ReflectionTestUtils.setField(second, "viewCount", 40L);
         ReflectionTestUtils.setField(third, "viewCount", 20L);
         ReflectionTestUtils.setField(fourth, "viewCount", 30L);
-        ReflectionTestUtils.setField(draft, "viewCount", 100L);
 
         postRepository.saveAllAndFlush(List.of(first, second, third, fourth, draft));
 
-        List<PostPopularDto> result = postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(3));
+        List<PostPopularDto> result = postRepository.findPopularPosts(3);
 
         assertThat(result)
             .extracting(PostPopularDto::postId)
@@ -118,7 +115,7 @@ public class PostRepositoryTest {
 
         entityManager.clear();
 
-        List<PostPopularDto> result = postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(3));
+        List<PostPopularDto> result = postRepository.findPopularPosts(3);
 
         assertThat(result)
             .extracting(PostPopularDto::postId)
@@ -130,7 +127,7 @@ public class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("공개 게시글이 3개 미만이면 존재하는 만큼 반환한다.")
+    @DisplayName("조회수가 양수인 게시글이 3개 미만이면 조회수 0인 글로 채우지 않는다.")
     void test_find_popular_posts_success_when_less_than_three() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
 
@@ -140,9 +137,13 @@ public class PostRepositoryTest {
         ReflectionTestUtils.setField(first, "viewCount", 20L);
         ReflectionTestUtils.setField(second, "viewCount", 10L);
 
-        postRepository.saveAllAndFlush(List.of(first, second));
+        postRepository.saveAllAndFlush(List.of(
+            first,
+            second,
+            Post.publish("조회수 없는 글", "요약", "본문", category)
+        ));
 
-        List<PostPopularDto> result = postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(3));
+        List<PostPopularDto> result = postRepository.findPopularPosts(3);
 
         assertThat(result)
             .extracting(PostPopularDto::postId)
@@ -150,15 +151,37 @@ public class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("공개 게시글이 없으면 빈 목록을 반환한다.")
-    void test_find_popular_posts_success_when_no_published_posts() {
+    @DisplayName("조회수가 양수인 게시글이 없으면 빈 목록을 반환한다.")
+    void test_find_popular_posts_success_when_no_viewed_posts() {
         Category category = categoryRepository.save(new Category("Backend", "backend"));
 
-        postRepository.saveAndFlush(Post.createDraft("임시저장", "요약", "본문", category));
+        postRepository.saveAllAndFlush(List.of(
+            Post.createDraft("임시저장", "요약", "본문", category),
+            Post.publish("공개 글", "요약", "본문", category)
+        ));
 
-        List<PostPopularDto> result = postRepository.findPopularPosts(PostStatus.PUBLISHED, Limit.of(3));
+        List<PostPopularDto> result = postRepository.findPopularPosts(3);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("조회수가 0인 카테고리 없는 초안은 인기글 수에 영향을 주지 않는다.")
+    void test_find_popular_posts_excludes_unviewed_draft() {
+        Category category = categoryRepository.save(new Category("Backend", "backend"));
+        Post uncategorized = Post.createDraft("카테고리 없는 글", "요약", "본문", null);
+        Post first = Post.publish("첫 번째", "요약", "본문", category);
+        Post second = Post.publish("두 번째", "요약", "본문", category);
+        Post third = Post.publish("세 번째", "요약", "본문", category);
+
+        ReflectionTestUtils.setField(first, "viewCount", 30L);
+        ReflectionTestUtils.setField(second, "viewCount", 20L);
+        ReflectionTestUtils.setField(third, "viewCount", 10L);
+        postRepository.saveAllAndFlush(List.of(uncategorized, first, second, third));
+
+        assertThat(postRepository.findPopularPosts(3))
+            .extracting(PostPopularDto::postId)
+            .containsExactly(first.getId(), second.getId(), third.getId());
     }
 
     private void updateCreatedAt(Long postId, LocalDateTime createdAt) {
