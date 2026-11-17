@@ -19,13 +19,14 @@ import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Session;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -44,11 +45,89 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             );
         }
 
-        List<PostSummaryProjection> summaries = queryFactory
+        List<PostSummaryProjection> summaries = condition.hasCategory() || condition.hasTags()
+            ? findFilteredPublishedPostSummaries(condition, pageable)
+            : findPagedPublishedPostSummaries(pageable);
+
+        JPAQuery<Long> countQuery = queryFactory
+            .select(post.count())
+            .from(post)
+            .where(
+                post.status.eq(PostStatus.PUBLISHED),
+                hasAllTags(condition.tagSlugs())
+            );
+
+        if (condition.hasCategory()) {
+            countQuery.join(post.category, category)
+                .where(categoryEq(condition.categorySlug()));
+        }
+
+        Long total = countQuery.fetchOne();
+
+        long totalElements = total == null ? 0 : total;
+
+        return createSummaryPage(summaries, pageable, totalElements);
+    }
+
+    private List<PostSummaryProjection> findPagedPublishedPostSummaries(Pageable pageable) {
+        String sql = """
+            SELECT
+                p.id AS post_id,
+                p.published_title AS title,
+                p.summary,
+                pi.id AS thumbnail_image_id,
+                c.name AS category_name,
+                c.slug AS category_slug,
+                p.created_at,
+                p.updated_at
+            FROM (
+                SELECT p2.id
+                FROM posts p2
+                WHERE p2.status = 'PUBLISHED'
+                ORDER BY p2.created_at DESC, p2.id DESC
+                LIMIT :offset, :size
+            ) page
+            JOIN posts p ON p.id = page.id
+            JOIN categories c ON c.id = p.category_id
+            LEFT JOIN post_images pi
+                ON pi.post_id = p.id
+                AND pi.type = 'THUMBNAIL'
+            ORDER BY p.created_at DESC, p.id DESC
+            """;
+
+        return entityManager.unwrap(Session.class)
+            .createNativeQuery(sql, Object[].class)
+            .addScalar("post_id", Long.class)
+            .addScalar("title", String.class)
+            .addScalar("summary", String.class)
+            .addScalar("thumbnail_image_id", Long.class)
+            .addScalar("category_name", String.class)
+            .addScalar("category_slug", String.class)
+            .addScalar("created_at", LocalDateTime.class)
+            .addScalar("updated_at", LocalDateTime.class)
+            .setParameter("offset", pageable.getOffset())
+            .setParameter("size", pageable.getPageSize())
+            .setTupleTransformer((row, _) -> new PostSummaryProjection(
+                (Long) row[0],
+                (String) row[1],
+                (String) row[2],
+                (Long) row[3],
+                (String) row[4],
+                (String) row[5],
+                (LocalDateTime) row[6],
+                (LocalDateTime) row[7]
+            ))
+            .getResultList();
+    }
+
+    private List<PostSummaryProjection> findFilteredPublishedPostSummaries(
+        PostSearchCondition condition, Pageable pageable
+    ) {
+        return queryFactory
             .select(Projections.constructor(
                 PostSummaryProjection.class,
                 post.id,
-                post.title,
+                post.publishedTitle,
                 post.summary,
                 postImage.id,
                 category.name,
@@ -72,25 +151,6 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .offset(pageable.getOffset())
             .limit(pageable.getPageSize())
             .fetch();
-
-        JPAQuery<Long> countQuery = queryFactory
-            .select(post.count())
-            .from(post)
-            .where(
-                post.status.eq(PostStatus.PUBLISHED),
-                hasAllTags(condition.tagSlugs())
-            );
-
-        if (condition.hasCategory()) {
-            countQuery.join(post.category, category)
-                .where(categoryEq(condition.categorySlug()));
-        }
-
-        Long total = countQuery.fetchOne();
-
-        long totalElements = total == null ? 0 : total;
-
-        return createSummaryPage(summaries, pageable, totalElements);
     }
 
     @Override
@@ -99,9 +159,9 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .select(Projections.constructor(
                 PostDetailProjection.class,
                 post.id,
-                post.title,
+                post.publishedTitle,
                 post.summary,
-                post.content,
+                post.publishedContent,
                 post.viewCount,
                 postImage.id,
                 category.name,
@@ -319,59 +379,63 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
 
     private Page<PostSummaryDto> findPublishedPostsByKeyword(String keyword, Pageable pageable) {
         String sql = """
-            select p.id
-            from posts p
-            where p.status = 'PUBLISHED'
-                and (
-                    match(p.title)
-                    against (:keyword in natural language mode) > 0
-                    or
-                    match(p.content)
-                    against (:keyword in natural language mode) > 0
-                )
-                order by (
-                    match(p.title)
-                    against (:keyword in natural language mode) * 2
-                    +
-                    match(p.content)
-                    against (:keyword in natural language mode)
-                ) desc,
-            p.created_at desc,
-            p.id desc
+            SELECT
+                p.id AS post_id,
+                p.published_title AS title,
+                p.summary,
+                pi.id AS thumbnail_image_id,
+                c.name AS category_name,
+                c.slug AS category_slug,
+                p.created_at,
+                p.updated_at
+            FROM (
+                SELECT
+                    p2.id,
+                    MATCH(p2.published_title, p2.published_content)
+                        AGAINST (:keyword IN NATURAL LANGUAGE MODE) AS relevance
+                FROM posts p2
+                WHERE p2.status = 'PUBLISHED'
+                    AND MATCH(p2.published_title, p2.published_content)
+                        AGAINST (:keyword IN NATURAL LANGUAGE MODE) > 0
+                ORDER BY relevance DESC
+                LIMIT :offset, :size
+            ) search_result
+            JOIN posts p ON p.id = search_result.id
+            JOIN categories c ON c.id = p.category_id
+            LEFT JOIN post_images pi
+                ON pi.post_id = p.id
+                AND pi.type = 'THUMBNAIL'
+            ORDER BY search_result.relevance DESC
             """;
 
-        List<?> rawIds = entityManager
-            .createNativeQuery(sql)
+        List<PostSummaryProjection> summaries = entityManager.unwrap(Session.class)
+            .createNativeQuery(sql, Object[].class)
+            .addScalar("post_id", Long.class)
+            .addScalar("title", String.class)
+            .addScalar("summary", String.class)
+            .addScalar("thumbnail_image_id", Long.class)
+            .addScalar("category_name", String.class)
+            .addScalar("category_slug", String.class)
+            .addScalar("created_at", LocalDateTime.class)
+            .addScalar("updated_at", LocalDateTime.class)
             .setParameter("keyword", keyword)
-            .setFirstResult(Math.toIntExact(pageable.getOffset()))
-            .setMaxResults(pageable.getPageSize())
+            .setParameter("offset", pageable.getOffset())
+            .setParameter("size", pageable.getPageSize())
+            .setTupleTransformer((row, _) -> new PostSummaryProjection(
+                (Long) row[0],
+                (String) row[1],
+                (String) row[2],
+                (Long) row[3],
+                (String) row[4],
+                (String) row[5],
+                (LocalDateTime) row[6],
+                (LocalDateTime) row[7]
+            ))
             .getResultList();
-
-        List<Long> postIds = rawIds.stream()
-            .map(Number.class::cast)
-            .map(Number::longValue)
-            .toList();
 
         long totalElements = countPublishedPostsByKeyword(keyword);
 
-        if (postIds.isEmpty()) {
-            return new PageImpl<>(List.of(), pageable, totalElements);
-        }
-
-        List<PostSummaryProjection> fetchedSummaries = findSummariesByPostIds(postIds);
-
-        Map<Long, PostSummaryProjection> summaryByPostId = fetchedSummaries.stream()
-            .collect(Collectors.toMap(
-                PostSummaryProjection::postId,
-                summary -> summary
-            ));
-
-        List<PostSummaryProjection> orderedSummaries = postIds.stream()
-            .map(summaryByPostId::get)
-            .filter(Objects::nonNull)
-            .toList();
-
-        return createSummaryPage(orderedSummaries, pageable, totalElements);
+        return createSummaryPage(summaries, pageable, totalElements);
     }
 
     private Page<PostSummaryDto> createSummaryPage(
@@ -444,16 +508,10 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
 
     private long countPublishedPostsByKeyword(String keyword) {
         String sql = """
-            select count(*)
-            from posts p
-            where p.status = 'PUBLISHED'
-                and (
-                    match(p.title)
-                    against (:keyword in natural language mode) > 0
-                    or
-                    match(p.content)
-                    against (:keyword in natural language mode) > 0
-                )
+            SELECT COUNT(*)
+            FROM posts p
+            WHERE MATCH(p.published_title, p.published_content)
+                AGAINST (:keyword IN NATURAL LANGUAGE MODE)
             """;
 
         Number result = (Number) entityManager
@@ -462,30 +520,6 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
             .getSingleResult();
 
         return result.longValue();
-    }
-
-    private List<PostSummaryProjection> findSummariesByPostIds(List<Long> ids) {
-        return queryFactory
-            .select(Projections.constructor(
-                PostSummaryProjection.class,
-                post.id,
-                post.title,
-                post.summary,
-                postImage.id,
-                category.name,
-                category.slug,
-                post.createdAt,
-                post.updatedAt
-            ))
-            .from(post)
-            .join(post.category, category)
-            .leftJoin(postImage)
-            .on(
-                postImage.post.eq(post),
-                postImage.type.eq(PostImageType.THUMBNAIL)
-            )
-            .where(post.id.in(ids))
-            .fetch();
     }
 
     private BooleanExpression categoryEq(String categorySlug) {
