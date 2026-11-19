@@ -222,6 +222,11 @@ public class PostService {
         return postRepository.findPopularPosts(POPULAR_POST_LIMIT);
     }
 
+    public PostOpenGraphDto getPublishedPostOpenGraph(Long postId) {
+        return postRepository.findPublishedPostOpenGraphById(postId)
+            .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));
+    }
+
     private void deletePost(Long postId, PostStatus requiredStatus) {
         Post post = postRepository.findByIdAndStatus(postId, requiredStatus)
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_NOT_FOUND));

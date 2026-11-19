@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.parkhyuns00.blog.domain.category.service.dto.CategoryDto;
 import com.parkhyuns00.blog.global.web.cookie.VisitorCookieManager;
+import com.parkhyuns00.blog.util.OpenGraphUtil;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftCreateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
@@ -51,6 +52,9 @@ public class PostControllerTest {
 
     @MockitoBean
     private VisitorCookieManager visitorCookieManager;
+
+    @MockitoBean
+    private OpenGraphUtil openGraphUtil;
 
     @Test
     @DisplayName("게시글 생성 요청이 성공하면 201 응답과 생성 결과를 반환한다.")

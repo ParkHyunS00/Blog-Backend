@@ -75,6 +75,40 @@ public class PostServiceTest {
     private HtmlSanitizerUtil htmlSanitizerUtil;
 
     @Test
+    @DisplayName("OG 조회는 공개 메타데이터만 읽고 게시글을 수정하지 않는다.")
+    void test_get_published_post_open_graph_without_side_effects() {
+        PostOpenGraphDto metadata = new PostOpenGraphDto(
+            1L, "제목", "요약", 2L, "image/webp", 800, 450
+        );
+        when(postRepository.findPublishedPostOpenGraphById(1L)).thenReturn(Optional.of(metadata));
+
+        assertThat(postService.getPublishedPostOpenGraph(1L)).isEqualTo(metadata);
+
+        verify(postRepository).findPublishedPostOpenGraphById(1L);
+        verifyNoMoreInteractions(postRepository);
+        verifyNoInteractions(postViewDeduplicationCache, postImageRepository, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("OG 공개 조회 결과가 없으면 기존 게시글 없음 예외를 반환한다.")
+    void test_get_published_post_open_graph_not_found() {
+        when(postRepository.findPublishedPostOpenGraphById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> postService.getPublishedPostOpenGraph(1L))
+            .isInstanceOf(PostException.class)
+            .hasMessage(PostExceptionCode.POST_NOT_FOUND.getMessage());
+    }
+
+    @Test
+    @DisplayName("데이터베이스 장애를 기본 OG 데이터로 숨기지 않는다.")
+    void test_get_published_post_open_graph_propagates_query_failure() {
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("database unavailable");
+        when(postRepository.findPublishedPostOpenGraphById(1L)).thenThrow(failure);
+
+        assertThatThrownBy(() -> postService.getPublishedPostOpenGraph(1L)).isSameAs(failure);
+    }
+
+    @Test
     @DisplayName("게시글을 생성하면 발행 상태로 저장하고 이미지와 태그를 연결한다.")
     void test_create_post_success() {
         PostCreateRequest request = new PostCreateRequest(
