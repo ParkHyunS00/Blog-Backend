@@ -221,6 +221,34 @@ public class PostQueryRepositoryImpl implements PostQueryRepository {
     }
 
     @Override
+    public Optional<PostOpenGraphDto> findPublishedPostOpenGraphById(Long postId) {
+        return Optional.ofNullable(queryFactory
+            .select(Projections.constructor(
+                PostOpenGraphDto.class,
+                post.id,
+                post.publishedTitle,
+                post.summary,
+                postImage.id,
+                postImage.mimeType,
+                postImage.width,
+                postImage.height
+            ))
+            .from(post)
+            .leftJoin(postImage)
+            .on(
+                postImage.post.eq(post),
+                postImage.type.eq(PostImageType.THUMBNAIL),
+                postImage.objectKey.trim().ne(""),
+                postImage.mimeType.startsWith("image/")
+            )
+            .where(
+                post.id.eq(postId),
+                post.status.eq(PostStatus.PUBLISHED)
+            )
+            .fetchOne());
+    }
+
+    @Override
     public Page<PostDraftSummaryDto> findDraftPosts(Pageable pageable) {
         List<PostDraftSummaryProjection> summaries = queryFactory.select(
             Projections.constructor(

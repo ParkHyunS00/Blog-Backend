@@ -10,6 +10,7 @@ public interface PostQueryRepository {
 
     Page<PostSummaryDto> findPublishedPosts(PostSearchCondition condition, Pageable pageable);
     Optional<PostDetailDto> findPublishedPostById(Long postId);
+    Optional<PostOpenGraphDto> findPublishedPostOpenGraphById(Long postId);
     Page<PostDraftSummaryDto> findDraftPosts(Pageable pageable);
     Optional<PostDraftDetailDto> findDraftPostById(Long postId);
 }
