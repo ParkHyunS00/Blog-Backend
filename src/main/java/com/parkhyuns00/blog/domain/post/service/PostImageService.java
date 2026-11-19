@@ -1,14 +1,17 @@
 package com.parkhyuns00.blog.domain.post.service;
 
+import com.parkhyuns00.blog.config.security.role.AdminRole;
 import com.parkhyuns00.blog.domain.post.exception.PostException;
 import com.parkhyuns00.blog.domain.post.exception.PostExceptionCode;
 import com.parkhyuns00.blog.domain.post.model.PostImage;
 import com.parkhyuns00.blog.domain.post.model.PostImageType;
+import com.parkhyuns00.blog.domain.post.model.PostStatus;
 import com.parkhyuns00.blog.domain.post.repository.PostImageRepository;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageDownloadDto;
 import com.parkhyuns00.blog.domain.post.service.dto.PostImageUploadDto;
 import com.parkhyuns00.blog.util.GarageUtil;
 import com.parkhyuns00.blog.util.ImageMetadataUtil;
+import com.parkhyuns00.blog.util.SecurityUtil;
 import com.parkhyuns00.blog.util.TikaUtil;
 import com.parkhyuns00.blog.util.dto.ImageMetadata;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +59,13 @@ public class PostImageService {
     }
 
     public PostImageDownloadDto download(Long imageId) {
-        PostImage postImage = postImageRepository.findById(imageId)
+        boolean isAdmin = SecurityUtil.getCurrentAdminRole()
+            .filter(role -> role == AdminRole.ADMIN)
+            .isPresent();
+
+        PostImage postImage = (isAdmin
+            ? postImageRepository.findById(imageId)
+            : postImageRepository.findByIdAndPostStatus(imageId, PostStatus.PUBLISHED))
             .orElseThrow(() -> new PostException(PostExceptionCode.POST_IMAGE_NOT_FOUND));
 
         ResponseInputStream<GetObjectResponse> inputStream = garageUtil.downloadObject(postImage.getObjectKey());
