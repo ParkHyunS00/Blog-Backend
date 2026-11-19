@@ -6,20 +6,28 @@ import com.parkhyuns00.blog.domain.post.controller.dto.PostDraftUpdateRequest;
 import com.parkhyuns00.blog.domain.post.controller.dto.PostRequest;
 import com.parkhyuns00.blog.domain.post.service.PostService;
 import com.parkhyuns00.blog.domain.post.service.dto.*;
+import com.parkhyuns00.blog.global.exception.BusinessException;
+import com.parkhyuns00.blog.global.exception.CommonExceptionCode;
 import com.parkhyuns00.blog.global.response.PageResponse;
 import com.parkhyuns00.blog.global.response.StandardResponse;
 import com.parkhyuns00.blog.global.web.cookie.VisitorCookieManager;
+import com.parkhyuns00.blog.util.OpenGraphUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class PostController {
@@ -28,6 +36,7 @@ public class PostController {
 
     private final PostService postService;
     private final VisitorCookieManager visitorCookieManager;
+    private final OpenGraphUtil openGraphUtil;
 
     @PostMapping("/api/admin/posts")
     public ResponseEntity<StandardResponse<PostCreateDto>> create(@Valid @RequestBody PostCreateRequest request) {
@@ -108,5 +117,38 @@ public class PostController {
     @GetMapping("/api/posts/popular")
     public ResponseEntity<StandardResponse<List<PostPopularDto>>> getPopularPosts() {
         return StandardResponse.ok(postService.getPopularPosts());
+    }
+
+    @GetMapping("/api/posts/og/{postId}")
+    public ResponseEntity<String> getPublishedPostOpenGraph(@PathVariable String postId) {
+        long id;
+        try {
+            id = Long.parseLong(postId);
+            if (id <= 0 || !postId.matches("[0-9]+")) {
+                throw new NumberFormatException("게시글 ID는 양의 정수여야 합니다.");
+            }
+        } catch (NumberFormatException exception) {
+            return ResponseEntity.status(CommonExceptionCode.INVALID_REQUEST.getHttpStatus())
+                .cacheControl(CacheControl.noStore()).contentLength(0).build();
+        }
+
+        // HTML-only crawlers may not accept JSON errors. Keep exception statuses
+        // and bodyless errors local to this endpoint, preserving the JSON APIs.
+        try {
+            String html = openGraphUtil.render(postService.getPublishedPostOpenGraph(id));
+            return ResponseEntity.ok()
+                .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
+                .cacheControl(CacheControl.noStore())
+                .body(html);
+        } catch (BusinessException exception) {
+            log.warn("[BusinessException] code={}, message={}, detail={}",
+                exception.getExceptionCode().getCode(), exception.getExceptionCode().getMessage(), exception.getDetail());
+            return ResponseEntity.status(exception.getExceptionCode().getHttpStatus())
+                .cacheControl(CacheControl.noStore()).contentLength(0).build();
+        } catch (Exception exception) {
+            log.error("Unexpected Open Graph exception", exception);
+            return ResponseEntity.status(CommonExceptionCode.INTERNAL_SERVER_ERROR.getHttpStatus())
+                .cacheControl(CacheControl.noStore()).contentLength(0).build();
+        }
     }
 }
